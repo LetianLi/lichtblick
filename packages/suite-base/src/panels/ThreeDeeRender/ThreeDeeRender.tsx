@@ -28,7 +28,7 @@ import {
 } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
-import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
+import { createSceneExtensionConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import { PANEL_STYLE } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
@@ -62,6 +62,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     initialState,
     saveState,
     unstable_fetchAsset: fetchAsset,
+    callService, // Extract callService from context
     unstable_setMessagePathDropConfig: setMessagePathDropConfig,
   } = context;
   const analytics = useAnalytics();
@@ -120,9 +121,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           config: configRef.current,
           interfaceMode,
           fetchAsset,
+          // Use the factory function to create scene extension config with context
           sceneExtensionConfig: _.merge(
             {},
-            DEFAULT_SCENE_EXTENSION_CONFIG,
+            createSceneExtensionConfig({ callService }), // Pass callService to the factory
             customSceneExtensions ?? {},
           ),
           displayTemporaryError,
@@ -144,6 +146,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     customCameraModels,
     interfaceMode,
     fetchAsset,
+    callService, // Include callService in dependencies
     testOptions,
     displayTemporaryError,
   ]);

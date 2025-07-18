@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { RenderableMarker } from "./RenderableMarker";
 import { markerHasTransparency, makeStandardVertexColorMaterial } from "./materials";
 import { DynamicBufferGeometry } from "../../DynamicBufferGeometry";
-import type { Renderer } from "../../Renderer";
+import { IRenderer } from "../../IRenderer";
 import { rgbaToLinear } from "../../color";
 import { Marker, Vector3 } from "../../ros";
 
@@ -28,7 +28,7 @@ export class RenderableTriangleList extends RenderableMarker {
     topic: string,
     marker: Marker,
     receiveTime: bigint | undefined,
-    renderer: Renderer,
+    renderer: IRenderer,
   ) {
     super(topic, marker, receiveTime, renderer);
 

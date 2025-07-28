@@ -11,6 +11,7 @@ import * as THREE from "three";
 import Logger from "@lichtblick/log";
 import { toNanoSec } from "@lichtblick/rostime";
 import { SettingsTreeAction, SettingsTreeFields, SettingsTreeChildren } from "@lichtblick/suite";
+import { filterMap } from "@lichtblick/den/collection";
 
 import { CollisionObjectRenderable, CollisionObjectUserData, CollisionObjectSettings } from "./CollisionObjectRenderable";
 import {
@@ -19,6 +20,7 @@ import {
   GetPlanningSceneResponse,
   createDefaultPlanningSceneComponents,
   DEFAULT_PLANNING_SCENE_SERVICE,
+  DEFAULT_PLANNING_SCENE_TOPIC,
   PLANNING_SCENE_DATATYPES,
   CollisionObject,
   CollisionObjectOperation,
@@ -79,7 +81,7 @@ const DEFAULT_CUSTOM_SETTINGS: LayerSettingsPlanningScene = {
   label: "Planning Scene",
   instanceId: "invalid",
   layerId: LAYER_ID,
-  topic: "",
+  topic: DEFAULT_PLANNING_SCENE_TOPIC,
   defaultColor: "#ffffff",
   sceneOpacity: 1.0,
   showCollisionObjects: true,
@@ -99,7 +101,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   private pendingServiceCall?: Promise<unknown>; // Track pending service calls for cleanup
 
   // Track current message context for creating renderables
-  private topic = "/planning_scene";
+  private topic = DEFAULT_PLANNING_SCENE_TOPIC;
   private receiveTime = 0n;
   private messageTime = 0n;
   private currentInstanceId?: string; // Track which layer instance is currently being processed
@@ -514,6 +516,15 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         const config = layerConfig as Partial<LayerSettingsPlanningScene>;
 
         const fields: SettingsTreeFields = {
+          topic: {
+            label: "Topic",
+            input: "autocomplete",
+            value: config.topic ?? DEFAULT_CUSTOM_SETTINGS.topic,
+            items: filterMap(this.renderer.topics ?? [], (_topic) =>
+              PLANNING_SCENE_DATATYPES.has(_topic.schemaName) ? _topic.name : undefined,
+            ),
+            help: "Planning scene topic to subscribe to",
+          },
           defaultColor: {
             label: "Default color",
             input: "rgb",
@@ -569,7 +580,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
               label: "Topic",
               input: "string",
               readonly: true,
-              value: config.topic ?? (this.topic || "/planning_scene"),
+              value: config.topic ?? DEFAULT_CUSTOM_SETTINGS.topic,
               help: "Planning scene topic to subscribe to",
             },
             status: {
@@ -839,12 +850,16 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   #shouldSubscribe = (topic: string): boolean => {
-    // Subscribe to topics that are configured in custom layers
+    // Subscribe to topics that are configured in custom layers and have the correct schema
     for (const layerConfig of Object.values(this.renderer.config.layers)) {
       if (layerConfig?.layerId === LAYER_ID) {
         const config = layerConfig as Partial<LayerSettingsPlanningScene>;
         if (config.topic === topic && config.visible === true) {
-          return true;
+          // Verify the topic has the correct schema
+          const topicInfo = this.renderer.topicsByName?.get(topic);
+          if (topicInfo && PLANNING_SCENE_DATATYPES.has(topicInfo.schemaName)) {
+            return true;
+          }
         }
       }
     }
@@ -1966,7 +1981,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const config: LayerSettingsPlanningScene = {
       ...DEFAULT_CUSTOM_SETTINGS,
       instanceId,
-      topic: this.topic || "/planning_scene", // Use current topic or default
+      topic: this.topic || DEFAULT_PLANNING_SCENE_TOPIC, // Use current topic or default
     };
 
     // Add this instance to the config
@@ -2088,6 +2103,24 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     } else if (fieldName === "showCollisionObjects") {
       // Visibility will be recalculated in the next frame by startFrame()
       // No need to manually update all objects here
+    } else if (fieldName === "topic") {
+      // Topic changed - clear current scene and refetch from new topic
+      const newTopic = value as string;
+      log.info(`Planning scene topic changed to: ${newTopic}`);
+
+      // Clear current scene data
+      this.currentScene = undefined;
+      this.initialSceneFetched = false;
+      this.fetchingInitialScene = false;
+
+      // Clear all renderables since we're switching topics
+      this.removeAllRenderables();
+
+      // Update the internal topic tracking
+      this.topic = newTopic;
+
+      // The subscription will be updated automatically by the renderer
+      // when the settings tree is updated
     }
   };
 }

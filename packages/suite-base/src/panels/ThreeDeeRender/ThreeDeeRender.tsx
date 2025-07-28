@@ -62,7 +62,6 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     initialState,
     saveState,
     unstable_fetchAsset: fetchAsset,
-    callService, // Extract callService from context
     unstable_setMessagePathDropConfig: setMessagePathDropConfig,
   } = context;
   const analytics = useAnalytics();
@@ -114,6 +113,17 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     [enqueueSnackbar],
   );
 
+  // Create a properly bound callback for callService to avoid unbound-method linting errors
+  const boundCallService = useCallback(
+    async (service: string, request: unknown): Promise<unknown> => {
+      if (!context.callService) {
+        throw new Error("Service calls are not supported by this data source");
+      }
+      return await context.callService(service, request);
+    },
+    [context],
+  );
+
   useEffect(() => {
     const newRenderer = canvas
       ? new Renderer({
@@ -124,7 +134,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           // Use the factory function to create scene extension config with context
           sceneExtensionConfig: _.merge(
             {},
-            createSceneExtensionConfig({ callService }), // Pass callService to the factory
+            createSceneExtensionConfig({ callService: boundCallService }), // Pass bound callService to the factory
             customSceneExtensions ?? {},
           ),
           displayTemporaryError,
@@ -146,7 +156,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     customCameraModels,
     interfaceMode,
     fetchAsset,
-    callService, // Include callService in dependencies
+    boundCallService, // Use bound callService in dependencies
     testOptions,
     displayTemporaryError,
   ]);

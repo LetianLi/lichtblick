@@ -131,7 +131,7 @@ export enum CollisionObjectOperation {
 
 export type SolidPrimitive = {
   type: SolidPrimitiveType; // Type of primitive
-  dimensions: number[]; // Dimensions for the primitive
+  dimensions: Float64Array | number[]; // Dimensions for the primitive (can be Float64Array from ROS)
 };
 
 export enum SolidPrimitiveType {
@@ -139,7 +139,6 @@ export enum SolidPrimitiveType {
   SPHERE = 2, // Sphere
   CYLINDER = 3, // Cylinder
   CONE = 4, // Cone
-  PRISM = 5, // Prism
 }
 
 export type Mesh = {
@@ -148,7 +147,7 @@ export type Mesh = {
 };
 
 export type MeshTriangle = {
-  vertex_indices: [number, number, number]; // Indices of triangle vertices
+  vertex_indices: Uint32Array; // Indices of triangle vertices (Uint32Array from ROS messages)
 };
 
 export type Plane = {
@@ -263,4 +262,39 @@ export function isPlanningSceneTopic(schemaName: string): boolean {
 // Utility function to check if a service schema matches GetPlanningScene type
 export function isGetPlanningSceneService(schemaName: string): boolean {
   return GET_PLANNING_SCENE_DATATYPES.has(schemaName);
+}
+
+// Normalization functions to handle arrays from ROS messages
+export function normalizeVertexIndices(indices: unknown): number[] {
+  if (indices == undefined) {
+    return [];
+  }
+  if (Array.isArray(indices)) {
+    return indices.map(Number);
+  }
+  if (indices instanceof Uint32Array || indices instanceof Int32Array) {
+    return Array.from(indices);
+  }
+  // Handle other typed arrays or array-like objects
+  if (typeof indices === 'object' && 'length' in indices) {
+    return Array.from(indices as ArrayLike<number>).map(Number);
+  }
+  return [];
+}
+
+export function normalizeDimensions(dimensions: unknown): number[] {
+  if (dimensions == undefined) {
+    return [];
+  }
+  if (Array.isArray(dimensions)) {
+    return dimensions.map(Number);
+  }
+  if (dimensions instanceof Float32Array || dimensions instanceof Float64Array) {
+    return Array.from(dimensions);
+  }
+  // Handle other typed arrays or array-like objects
+  if (typeof dimensions === 'object' && 'length' in dimensions) {
+    return Array.from(dimensions as ArrayLike<number>).map(Number);
+  }
+  return [];
 }

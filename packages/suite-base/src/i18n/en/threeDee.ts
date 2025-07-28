@@ -82,6 +82,7 @@ export const threeDee = {
 
   // Custom layers
   addGrid: "Add Grid",
+  addPlanningScene: "Add Planning Scene",
   addURDF: "Add URDF",
   customLayers: "Custom layers",
   delete: "Delete",

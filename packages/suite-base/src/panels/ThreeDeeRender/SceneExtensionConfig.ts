@@ -5,6 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { BuiltinPanelExtensionContext } from '@lichtblick/suite-base/components/PanelExtensionAdapter';
 import { Cameras } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Cameras";
 import { FoxgloveGrid } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/FoxgloveGrid";
 import { FrameAxes } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/FrameAxes";
@@ -14,7 +15,6 @@ import { Images } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables
 import { LaserScans } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/LaserScans";
 import { Markers } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Markers";
 import { OccupancyGrids } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/OccupancyGrids";
-import { PlanningScene } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PlanningScene";
 import { PointClouds } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PointClouds";
 import { Polygons } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Polygons";
 import { PoseArrays } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/PoseArrays";
@@ -24,13 +24,13 @@ import { FoxgloveSceneEntities } from "@lichtblick/suite-base/panels/ThreeDeeRen
 import { SceneSettings } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/SceneSettings";
 import { Urdfs } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Urdfs";
 import { VelodyneScans } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/VelodyneScans";
+import { PlanningSceneExtension } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/planningScene/PlanningSceneExtension";
 
 import { IRenderer } from "./IRenderer";
 import { SceneExtension } from "./SceneExtension";
 import { MeasurementTool } from "./renderables/MeasurementTool";
 import { PublishClickTool } from "./renderables/PublishClickTool";
 import { InterfaceMode } from "./types";
-import { BuiltinPanelExtensionContext } from '@lichtblick/suite-base/components/PanelExtensionAdapter';
 
 export type SceneExtensionConfig = {
   /** Reserved because the Renderer has members that reference them specifically */
@@ -105,9 +105,9 @@ export function createSceneExtensionConfig(
       [OccupancyGrids.extensionId]: {
         init: (renderer: IRenderer) => new OccupancyGrids(renderer),
       },
-      [PlanningScene.extensionId]: {
-        // Inject context into PlanningScenes
-        init: (renderer: IRenderer) => new PlanningScene(renderer, context?.callService),
+      [PlanningSceneExtension.extensionId]: {
+        // Inject context into PlanningSceneExtension
+        init: (renderer: IRenderer) => new PlanningSceneExtension(renderer, context?.callService),
         supportedInterfaceModes: ["3d"],
       },
       [PointClouds.extensionId]: {
@@ -133,5 +133,4 @@ export function createSceneExtensionConfig(
 }
 
 // Default export for backwards compatibility
-// TODO: Update Renderer.test.ts to use the factory function
 export const DEFAULT_SCENE_EXTENSION_CONFIG: SceneExtensionConfig = createSceneExtensionConfig();

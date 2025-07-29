@@ -12,6 +12,7 @@ import {
     CollisionObject,
     CollisionObjectOperation,
     SolidPrimitiveType,
+    AttachedCollisionObject,
 } from "./types";
 import type { IRenderer } from "../../IRenderer";
 import { TransformTree } from "../../transforms";
@@ -129,27 +130,41 @@ describe("PlanningSceneExtension", () => {
 
         mockServiceClient = jest.fn();
 
-        (CollisionObjectRenderable as jest.MockedClass<typeof CollisionObjectRenderable>).mockImplementation((objectId: string) => ({
-            update: jest.fn(),
-            dispose: jest.fn(),
-            visible: true,
-            setExtension: jest.fn(), // Add the missing setExtension method
-            userData: {
-                frameId: "base_link",
-                collisionObject: {
-                    id: objectId,
-                    header: { frame_id: "base_link" },
-                    primitives: [],
-                    meshes: [],
-                    planes: [],
-                    primitive_poses: [],
-                    mesh_poses: [],
-                    plane_poses: [],
+        (CollisionObjectRenderable as jest.MockedClass<typeof CollisionObjectRenderable>).mockImplementation((objectId: string) => {
+            const mockRenderable = {
+                update: jest.fn((object: any) => {
+                    // Update the userData to reflect the new collision object data
+                    mockRenderable.userData.frameId = object.header.frame_id;
+                    mockRenderable.userData.collisionObject = object;
+                }),
+                dispose: jest.fn(),
+                visible: true,
+                setExtension: jest.fn(), // Add the missing setExtension method
+                userData: {
+                    frameId: "base_link",
+                    collisionObject: {
+                        id: objectId,
+                        header: { frame_id: "base_link" },
+                        primitives: [],
+                        meshes: [],
+                        planes: [],
+                        primitive_poses: [],
+                        mesh_poses: [],
+                        plane_poses: [],
+                    },
+                    settings: {
+                        visible: true,
+                        opacity: 1.0,
+                        showPrimitives: true,
+                        showMeshes: true,
+                        showPlanes: true,
+                        color: undefined, // Will be set by the extension when colors are available
+                    },
+                    settingsPath: [],
                 },
-                settings: { visible: true, opacity: 1.0, showPrimitives: true, showMeshes: true, showPlanes: true },
-                settingsPath: [],
-            },
-        } as any));
+            };
+            return mockRenderable as any;
+        });
 
         extension = new PlanningSceneExtension(mockRenderer, mockServiceClient);
     });
@@ -651,6 +666,225 @@ describe("PlanningSceneExtension", () => {
             expect(emptyGeometryObject.primitives).toHaveLength(0);
             expect(emptyGeometryObject.meshes).toHaveLength(0);
             expect(emptyGeometryObject.planes).toHaveLength(0);
+        });
+    });
+
+    describe("Attached Collision Objects", () => {
+        beforeEach(() => {
+            // Setup a layer to enable message processing
+            (mockRenderer.config.layers as any)["test-layer"] = {
+                layerId: "foxglove.PlanningScene",
+                visible: true,
+                topic: "/planning_scene",
+            };
+        });
+
+        it("should process attached collision objects with correct frame", () => {
+            const attachedObject: AttachedCollisionObject = {
+                link_name: "gripper_link",
+                object: createTestCollisionObject("attached_box"),
+                touch_links: ["gripper_finger_1", "gripper_finger_2"],
+                detach_posture: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    joint_names: [],
+                    points: [],
+                },
+                weight: 0.5,
+            };
+
+            const sceneWithAttachedObject = createTestPlanningScene([]);
+            sceneWithAttachedObject.robot_state = {
+                joint_state: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    name: [],
+                    position: [],
+                    velocity: [],
+                    effort: [],
+                },
+                multi_dof_joint_state: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    joint_names: [],
+                    transforms: [],
+                    twist: [],
+                    wrench: [],
+                },
+                attached_collision_objects: [attachedObject],
+                is_diff: false,
+            };
+
+            // Simulate message processing
+            const messageEvent = {
+                topic: "/planning_scene",
+                receiveTime: { sec: 0, nsec: 0 },
+                message: sceneWithAttachedObject,
+                schemaName: "moveit_msgs/PlanningScene",
+                sizeInBytes: 1024,
+            };
+
+            const subscriptions = extension.getSubscriptions();
+            const handler = subscriptions[0]?.subscription.handler;
+            expect(handler).toBeDefined();
+
+            // Call the handler to process the message
+            handler!(messageEvent);
+
+            // Verify that a renderable was created for the attached object
+            expect(extension.renderables.size).toBe(1);
+            expect(extension.renderables.has("attached_box")).toBe(true);
+
+            // Verify that the renderable has the correct frame (gripper_link instead of base_link)
+            const renderable = extension.renderables.get("attached_box");
+            expect(renderable?.userData.frameId).toBe("gripper_link");
+        });
+
+        it("should handle multiple attached collision objects", () => {
+            const attachedObject1: AttachedCollisionObject = {
+                link_name: "left_gripper",
+                object: createTestCollisionObject("left_tool"),
+                touch_links: ["left_finger"],
+                detach_posture: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    joint_names: [],
+                    points: [],
+                },
+                weight: 0.3,
+            };
+
+            const attachedObject2: AttachedCollisionObject = {
+                link_name: "right_gripper",
+                object: createTestCollisionObject("right_tool"),
+                touch_links: ["right_finger"],
+                detach_posture: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    joint_names: [],
+                    points: [],
+                },
+                weight: 0.4,
+            };
+
+            const sceneWithMultipleAttached = createTestPlanningScene([]);
+            sceneWithMultipleAttached.robot_state = {
+                joint_state: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    name: [],
+                    position: [],
+                    velocity: [],
+                    effort: [],
+                },
+                multi_dof_joint_state: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    joint_names: [],
+                    transforms: [],
+                    twist: [],
+                    wrench: [],
+                },
+                attached_collision_objects: [attachedObject1, attachedObject2],
+                is_diff: false,
+            };
+
+            // Simulate message processing
+            const messageEvent = {
+                topic: "/planning_scene",
+                receiveTime: { sec: 0, nsec: 0 },
+                message: sceneWithMultipleAttached,
+                schemaName: "moveit_msgs/PlanningScene",
+                sizeInBytes: 1024,
+            };
+
+            const subscriptions = extension.getSubscriptions();
+            const handler = subscriptions[0]?.subscription.handler;
+            expect(handler).toBeDefined();
+
+            // Call the handler to process the message
+            handler!(messageEvent);
+
+            // Verify that renderables were created for both attached objects
+            expect(extension.renderables.size).toBe(2);
+            expect(extension.renderables.has("left_tool")).toBe(true);
+            expect(extension.renderables.has("right_tool")).toBe(true);
+
+            // Verify that each renderable has the correct frame
+            const leftRenderable = extension.renderables.get("left_tool");
+            const rightRenderable = extension.renderables.get("right_tool");
+            expect(leftRenderable?.userData.frameId).toBe("left_gripper");
+            expect(rightRenderable?.userData.frameId).toBe("right_gripper");
+        });
+
+        it("should preserve colors for attached collision objects", () => {
+            const attachedObject: AttachedCollisionObject = {
+                link_name: "gripper_link",
+                object: createTestCollisionObject("colored_tool"),
+                touch_links: ["gripper_finger"],
+                detach_posture: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    joint_names: [],
+                    points: [],
+                },
+                weight: 0.2,
+            };
+
+            const sceneWithColoredAttached = createTestPlanningScene([]);
+            sceneWithColoredAttached.robot_state = {
+                joint_state: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    name: [],
+                    position: [],
+                    velocity: [],
+                    effort: [],
+                },
+                multi_dof_joint_state: {
+                    header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
+                    joint_names: [],
+                    transforms: [],
+                    twist: [],
+                    wrench: [],
+                },
+                attached_collision_objects: [attachedObject],
+                is_diff: false,
+            };
+
+            // Add color information for the attached object
+            sceneWithColoredAttached.object_colors = [
+                { id: "colored_tool", color: { r: 1.0, g: 0.5, b: 0.0, a: 0.9 } }, // Orange color
+            ];
+
+            // Spy on the private getObjectColorFromScene method to verify it's called correctly
+            const getObjectColorSpy = jest.spyOn(extension as any, 'getObjectColorFromScene');
+
+            // Simulate message processing
+            const messageEvent = {
+                topic: "/planning_scene",
+                receiveTime: { sec: 0, nsec: 0 },
+                message: sceneWithColoredAttached,
+                schemaName: "moveit_msgs/PlanningScene",
+                sizeInBytes: 1024,
+            };
+
+            const subscriptions = extension.getSubscriptions();
+            const handler = subscriptions[0]?.subscription.handler;
+            expect(handler).toBeDefined();
+
+            // Call the handler to process the message
+            handler!(messageEvent);
+
+            // Verify that the attached object was created
+            expect(extension.renderables.size).toBe(1);
+            expect(extension.renderables.has("colored_tool")).toBe(true);
+
+            const renderable = extension.renderables.get("colored_tool");
+            expect(renderable?.userData.frameId).toBe("gripper_link");
+
+            // Verify that getObjectColorFromScene was called for the attached object
+            expect(getObjectColorSpy).toHaveBeenCalledWith("colored_tool");
+
+            // Test the color extraction method directly
+            const colorResult = (extension as any).getObjectColorFromScene("colored_tool");
+            expect(colorResult).toEqual({
+                color: "#ff8000", // Orange in hex (1.0 * 255 = 255 = ff, 0.5 * 255 = 128 = 80, 0.0 * 255 = 0 = 00)
+                opacity: 0.9,
+            });
+
+            getObjectColorSpy.mockRestore();
         });
     });
 

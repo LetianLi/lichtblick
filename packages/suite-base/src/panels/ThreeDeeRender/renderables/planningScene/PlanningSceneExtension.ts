@@ -27,6 +27,8 @@ import {
   Mesh,
   SolidPrimitive,
   SolidPrimitiveType,
+  RobotState,
+  AttachedCollisionObject,
 } from "./types";
 import type { IRenderer, AnyRendererSubscription } from "../../IRenderer";
 import { Renderable } from "../../Renderable";
@@ -1160,8 +1162,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     // Process robot state updates if present
     if (scene.robot_state) {
-      // Robot state updates will be handled in future tasks
-      log.info("Robot state update received (not yet implemented)");
+      this.processRobotState(scene.robot_state, scene);
     }
 
     // Process transform updates if present
@@ -1173,6 +1174,62 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Update current scene by merging the differential data
     // This is a deep merge to preserve existing data while updating changed fields
     this.currentScene = this.mergeSceneData(this.currentScene, scene);
+  }
+
+  // Process robot state including attached collision objects
+  private processRobotState(robotState: PartialMessage<RobotState>, scene?: PartialMessage<PlanningScene>): void {
+    // Process attached collision objects
+    if (robotState.attached_collision_objects) {
+      for (const attachedObject of robotState.attached_collision_objects) {
+        if (attachedObject?.object && attachedObject.link_name) {
+          this.processAttachedCollisionObject(attachedObject, scene);
+        }
+      }
+    }
+
+    // Joint state processing could be added here in the future
+    if (robotState.joint_state) {
+      log.info("Joint state processing (not yet implemented)");
+    }
+
+    // Multi-DOF joint state processing could be added here in the future
+    if (robotState.multi_dof_joint_state) {
+      log.info("Multi-DOF joint state processing (not yet implemented)");
+    }
+  }
+
+  // Process an attached collision object
+  private processAttachedCollisionObject(attachedObject: PartialMessage<AttachedCollisionObject>, scene?: PartialMessage<PlanningScene>): void {
+    const object = attachedObject.object!;
+    const linkName = attachedObject.link_name!;
+    const objectId = object.id!;
+
+    // Temporarily store the current scene to preserve color information
+    const previousScene = this.currentScene;
+
+    // If we have scene data, temporarily update currentScene to ensure color information is available
+    if (scene) {
+      this.currentScene = scene;
+    }
+
+    try {
+      // Create a modified collision object with the link frame
+      const attachedCollisionObject: PartialMessage<CollisionObject> = {
+        ...object,
+        header: {
+          ...object.header,
+          frame_id: linkName, // Use the link name as the frame instead of the object's original frame
+        },
+      };
+
+      // Apply the collision object operation (usually ADD for attached objects)
+      this.applyCollisionObjectOperation(attachedCollisionObject);
+
+      log.info(`Processed attached collision object '${objectId}' attached to link '${linkName}'`);
+    } finally {
+      // Restore the previous scene state
+      this.currentScene = previousScene;
+    }
   }
 
   // Replace entire scene
@@ -1194,8 +1251,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     // Process robot state if present
     if (scene.robot_state) {
-      // Robot state processing will be handled in future tasks
-      log.info("Robot state processing (not yet implemented)");
+      this.processRobotState(scene.robot_state, scene);
     }
 
     // Process other scene components as needed

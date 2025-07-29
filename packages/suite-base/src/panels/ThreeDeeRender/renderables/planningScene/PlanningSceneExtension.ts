@@ -8,10 +8,10 @@
 import * as _ from "lodash-es";
 import * as THREE from "three";
 
+import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
 import { toNanoSec } from "@lichtblick/rostime";
 import { SettingsTreeAction, SettingsTreeFields, SettingsTreeChildren } from "@lichtblick/suite";
-import { filterMap } from "@lichtblick/den/collection";
 
 import { CollisionObjectRenderable, CollisionObjectUserData, CollisionObjectSettings } from "./CollisionObjectRenderable";
 import {
@@ -123,6 +123,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
   // Performance monitoring: Track visible object count for optimization insights
   private visibleObjectCount = 0;
+
+  // Performance optimization: Reusable objects for frustum culling
+  private frustum = new THREE.Frustum();
+  private cameraMatrix = new THREE.Matrix4();
 
   // Helper method to find the instance ID for a given topic
   private findInstanceIdForTopic(topic: string): string | undefined {
@@ -898,10 +902,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     // Performance optimization: Get camera frustum for frustum culling
     const camera = this.renderer.cameraHandler.getActiveCamera();
-    const frustum = new THREE.Frustum();
-    const cameraMatrix = new THREE.Matrix4();
-    cameraMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    frustum.setFromProjectionMatrix(cameraMatrix);
+    this.cameraMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
+    this.frustum.setFromProjectionMatrix(this.cameraMatrix);
 
     // Apply additional PlanningScene-specific visibility logic
     for (const collisionObject of this.renderables.values()) {
@@ -942,7 +944,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         boundingSphere.radius = Math.max(scale.x, scale.y, scale.z) * 2; // Conservative estimate
 
         // Skip if outside frustum
-        if (!frustum.intersectsSphere(boundingSphere)) {
+        if (!this.frustum.intersectsSphere(boundingSphere)) {
           continue;
         }
       }

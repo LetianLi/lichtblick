@@ -3,6 +3,8 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2025 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import * as THREE from "three";
+
 import { CollisionObjectRenderable } from "./CollisionObjectRenderable";
 import { PlanningSceneExtension } from "./PlanningSceneExtension";
 import {
@@ -121,6 +123,8 @@ describe("PlanningSceneExtension", () => {
                     matrixWorldInverse: { elements: [] },
                 }),
             },
+            topics: [],
+            topicsByName: new Map(),
         } as unknown as jest.Mocked<IRenderer>;
 
         mockServiceClient = jest.fn();
@@ -129,9 +133,19 @@ describe("PlanningSceneExtension", () => {
             update: jest.fn(),
             dispose: jest.fn(),
             visible: true,
+            setExtension: jest.fn(), // Add the missing setExtension method
             userData: {
                 frameId: "base_link",
-                collisionObject: { id: objectId, header: { frame_id: "base_link" } },
+                collisionObject: {
+                    id: objectId,
+                    header: { frame_id: "base_link" },
+                    primitives: [],
+                    meshes: [],
+                    planes: [],
+                    primitive_poses: [],
+                    mesh_poses: [],
+                    plane_poses: [],
+                },
                 settings: { visible: true, opacity: 1.0, showPrimitives: true, showMeshes: true, showPlanes: true },
                 settingsPath: [],
             },
@@ -145,34 +159,43 @@ describe("PlanningSceneExtension", () => {
         jest.clearAllMocks();
     });
 
-    it("should have correct extension ID", () => {
-        expect(PlanningSceneExtension.extensionId).toBe("foxglove.PlanningScene");
-    });
+    describe("Basic Functionality", () => {
+        it("should have correct extension ID", () => {
+            expect(PlanningSceneExtension.extensionId).toBe("foxglove.PlanningScene");
+        });
 
-    it("should initialize with default visibility", () => {
-        expect(extension.visible).toBe(true);
-    });
+        it("should initialize with default visibility", () => {
+            expect(extension.visible).toBe(true);
+        });
 
-    it("should return planning scene subscriptions", () => {
-        const subscriptions = extension.getSubscriptions();
-        expect(subscriptions).toHaveLength(1);
-        expect(subscriptions[0]?.type).toBe("schema");
-        const subscription = subscriptions[0];
-        expect(subscription).toMatchObject({
-            type: "schema",
-            schemaNames: expect.objectContaining(
-                new Set(["moveit_msgs/PlanningScene", "moveit_msgs/msg/PlanningScene"])
-            ),
+        it("should return planning scene subscriptions", () => {
+            const subscriptions = extension.getSubscriptions();
+            expect(subscriptions).toHaveLength(1);
+            expect(subscriptions[0]?.type).toBe("schema");
+            expect(subscriptions[0]).toMatchObject({
+                type: "schema",
+                schemaNames: expect.objectContaining(
+                    new Set(["moveit_msgs/PlanningScene", "moveit_msgs/msg/PlanningScene"])
+                ),
+            });
+        });
+
+        it("should support performance statistics", () => {
+            const stats = extension.getPerformanceStats();
+            expect(stats).toMatchObject({
+                totalObjects: 0,
+                visibleObjects: 0,
+                hiddenObjects: 0,
+                cachedGeometries: 0,
+                cachedMaterials: 0,
+                cachedMeshes: 0,
+                objectHashes: 0,
+                cullingSavings: "0%",
+            });
         });
     });
 
     describe("Layer Management", () => {
-        it("should have layer management functionality", () => {
-            // Test that the extension has the required methods for layer management
-            expect(typeof extension.handleSettingsAction).toBe("function");
-            expect(typeof extension.settingsNodes).toBe("function");
-        });
-
         it("should return settings nodes for layers", () => {
             const instanceId = "test-layer-1";
 
@@ -187,6 +210,22 @@ describe("PlanningSceneExtension", () => {
 
             const nodes = extension.settingsNodes();
             expect(Array.isArray(nodes)).toBe(true);
+            expect(nodes.length).toBeGreaterThan(0);
+        });
+
+        it("should handle layer visibility changes", () => {
+            const instanceId = "test-layer-1";
+            (mockRenderer.config.layers as any)[instanceId] = {
+                layerId: "foxglove.PlanningScene",
+                instanceId,
+                visible: false,
+                topic: "/planning_scene",
+                order: 1,
+            };
+
+            const nodes = extension.settingsNodes();
+            const layerNode = nodes.find(node => node.path[1] === instanceId);
+            expect(layerNode?.node.visible).toBe(false);
         });
 
         it("should have message processing capability", () => {
@@ -196,8 +235,36 @@ describe("PlanningSceneExtension", () => {
         });
     });
 
-    describe("Collision Object Visibility", () => {
-        it("should support collision object visibility controls", () => {
+    describe("Collision Object Operations", () => {
+        it("should support all collision object operations", () => {
+            // Test ADD operation (default)
+            const addObject = createTestCollisionObject("add_object", CollisionObjectOperation.ADD);
+            expect(addObject.operation).toBe(CollisionObjectOperation.ADD);
+            expect(addObject.primitives).toHaveLength(1);
+
+            // Test REMOVE operation
+            const removeObject = createTestCollisionObject("remove_object", CollisionObjectOperation.REMOVE);
+            expect(removeObject.operation).toBe(CollisionObjectOperation.REMOVE);
+
+            // Test APPEND operation
+            const appendObject = createTestCollisionObject("append_object", CollisionObjectOperation.APPEND);
+            expect(appendObject.operation).toBe(CollisionObjectOperation.APPEND);
+
+            // Test MOVE operation (should have empty geometry arrays)
+            const moveObject: CollisionObject = {
+                ...createTestCollisionObject("move_object", CollisionObjectOperation.MOVE),
+                primitives: [],
+                primitive_poses: [],
+                meshes: [],
+                mesh_poses: [],
+                planes: [],
+                plane_poses: [],
+            };
+            expect(moveObject.operation).toBe(CollisionObjectOperation.MOVE);
+            expect(moveObject.primitives).toHaveLength(0);
+        });
+
+        it("should support visibility controls", () => {
             // Test that the extension has visibility control methods
             expect(typeof extension.handleSettingsAction).toBe("function");
 
@@ -207,16 +274,8 @@ describe("PlanningSceneExtension", () => {
         });
     });
 
-    describe("Settings Persistence", () => {
-        it("should support settings persistence", () => {
-            // Test that the extension has settings persistence capability
-            expect(typeof extension.handleSettingsAction).toBe("function");
-            expect(typeof extension.settingsNodes).toBe("function");
-        });
-    });
-
     describe("Collision Object Rendering", () => {
-        it("should support all primitive types", () => {
+        it("should support all primitive types with realistic dimensions", () => {
             // Test Box primitive
             const boxObject = createTestCollisionObject("box_object");
             expect(boxObject.primitives[0]?.type).toBe(SolidPrimitiveType.BOX);
@@ -230,25 +289,24 @@ describe("PlanningSceneExtension", () => {
             expect(sphereObject.primitives[0]?.type).toBe(SolidPrimitiveType.SPHERE);
             expect(sphereObject.primitives[0]?.dimensions).toEqual([0.5]);
 
-            // Test Cylinder primitive
+            // Test Cylinder primitive (height, radius)
             const cylinderObject: CollisionObject = {
                 ...createTestCollisionObject("cylinder_object"),
-                primitives: [{ type: SolidPrimitiveType.CYLINDER, dimensions: [2.0, 0.3] }], // height, radius
+                primitives: [{ type: SolidPrimitiveType.CYLINDER, dimensions: [2.0, 0.3] }],
             };
             expect(cylinderObject.primitives[0]?.type).toBe(SolidPrimitiveType.CYLINDER);
             expect(cylinderObject.primitives[0]?.dimensions).toEqual([2.0, 0.3]);
 
-            // Test Cone primitive
+            // Test Cone primitive (height, radius)
             const coneObject: CollisionObject = {
                 ...createTestCollisionObject("cone_object"),
-                primitives: [{ type: SolidPrimitiveType.CONE, dimensions: [1.5, 0.4] }], // height, radius
+                primitives: [{ type: SolidPrimitiveType.CONE, dimensions: [1.5, 0.4] }],
             };
             expect(coneObject.primitives[0]?.type).toBe(SolidPrimitiveType.CONE);
             expect(coneObject.primitives[0]?.dimensions).toEqual([1.5, 0.4]);
         });
 
-        it("should support complex mesh objects", () => {
-            // Test realistic mesh with multiple triangles
+        it("should support complex mesh objects with multiple triangles", () => {
             const complexMeshObject: CollisionObject = {
                 ...createTestCollisionObject("complex_mesh"),
                 primitives: [],
@@ -295,7 +353,6 @@ describe("PlanningSceneExtension", () => {
         });
 
         it("should support mixed geometry objects", () => {
-            // Test object with multiple types of geometry
             const mixedObject: CollisionObject = {
                 ...createTestCollisionObject("mixed_object"),
                 primitives: [
@@ -322,30 +379,8 @@ describe("PlanningSceneExtension", () => {
     });
 
     describe("Advanced Features", () => {
-        it("should support octomap rendering", () => {
-            const octomapScene = createTestPlanningScene([]);
-            // Override the octomap with test data
-            octomapScene.world.octomap = {
-                header: { frame_id: "map", stamp: { sec: 1234, nsec: 567890 } },
-                origin: { position: { x: 1, y: 2, z: 3 }, orientation: { x: 0, y: 0, z: 0.707, w: 0.707 } },
-                octomap: {
-                    header: { frame_id: "map", stamp: { sec: 1234, nsec: 567890 } },
-                    binary: true,
-                    id: "OcTree",
-                    resolution: 0.05,
-                    data: [1, 2, 3, 4, 5] // Mock binary octree data
-                }
-            };
-
-            expect(octomapScene.world.octomap.octomap.binary).toBe(true);
-            expect(octomapScene.world.octomap.octomap.resolution).toBe(0.05);
-            expect(octomapScene.world.octomap.octomap.data).toHaveLength(5);
-        });
-
         it("should support object colors and transparency", () => {
             const redBox = createTestCollisionObject("red_box");
-            redBox.primitives = [{ type: SolidPrimitiveType.BOX, dimensions: [1, 1, 1] }];
-
             const blueSphere = createTestCollisionObject("blue_sphere");
             blueSphere.primitives = [{ type: SolidPrimitiveType.SPHERE, dimensions: [0.5] }];
 
@@ -356,45 +391,382 @@ describe("PlanningSceneExtension", () => {
             ];
 
             expect(coloredScene.object_colors).toHaveLength(2);
-            expect(coloredScene.object_colors[0]?.color.a).toBe(0.8); // Semi-transparent
-            expect(coloredScene.object_colors[1]?.color.a).toBe(0.5); // More transparent
+            expect(coloredScene.object_colors[0]?.color.a).toBe(0.8);
+            expect(coloredScene.object_colors[1]?.color.a).toBe(0.5);
             expect(coloredScene.world.collision_objects).toHaveLength(2);
+        });
+
+        it("should support octomap rendering", () => {
+            const octomapScene = createTestPlanningScene([]);
+            octomapScene.world.octomap = {
+                header: { frame_id: "map", stamp: { sec: 1234, nsec: 567890 } },
+                origin: { position: { x: 1, y: 2, z: 3 }, orientation: { x: 0, y: 0, z: 0.707, w: 0.707 } },
+                octomap: {
+                    header: { frame_id: "map", stamp: { sec: 1234, nsec: 567890 } },
+                    binary: true,
+                    id: "OcTree",
+                    resolution: 0.05,
+                    data: [1, 2, 3, 4, 5]
+                }
+            };
+
+            expect(octomapScene.world.octomap.octomap.binary).toBe(true);
+            expect(octomapScene.world.octomap.octomap.resolution).toBe(0.05);
+            expect(octomapScene.world.octomap.octomap.data).toHaveLength(5);
         });
     });
 
-    it("should support all collision object operations", () => {
-        // Test ADD operation (default)
-        const addObject = createTestCollisionObject("add_object", CollisionObjectOperation.ADD);
-        expect(addObject.operation).toBe(CollisionObjectOperation.ADD);
-        expect(addObject.primitives).toHaveLength(1); // ADD operations can have geometry
+    describe("Service Integration", () => {
+        it("should support service client integration", async () => {
+            const testResponse = { scene: createTestPlanningScene([]) };
+            mockServiceClient.mockResolvedValueOnce(testResponse);
 
-        // Test REMOVE operation
-        const removeObject = createTestCollisionObject("remove_object", CollisionObjectOperation.REMOVE);
-        expect(removeObject.operation).toBe(CollisionObjectOperation.REMOVE);
+            // Test that the extension can retry fetching initial scene
+            extension.retryFetchInitialScene();
 
-        // Test APPEND operation
-        const appendObject = createTestCollisionObject("append_object", CollisionObjectOperation.APPEND);
-        expect(appendObject.operation).toBe(CollisionObjectOperation.APPEND);
+            // Wait for the async operation to complete
+            await new Promise(resolve => setTimeout(resolve, 0));
 
-        // Test MOVE operation (should have empty geometry arrays)
-        const moveObject: CollisionObject = {
-            ...createTestCollisionObject("move_object", CollisionObjectOperation.MOVE),
-            primitives: [], // Move operations should have empty geometry
-            primitive_poses: [],
-            meshes: [],
-            mesh_poses: [],
-            planes: [],
-            plane_poses: [],
-        };
-        expect(moveObject.operation).toBe(CollisionObjectOperation.MOVE);
-        expect(moveObject.primitives).toHaveLength(0);
-        expect(moveObject.meshes).toHaveLength(0);
-        expect(moveObject.planes).toHaveLength(0);
+            expect(mockServiceClient).toHaveBeenCalledWith(
+                "/get_planning_scene",
+                expect.objectContaining({
+                    components: expect.any(Object)
+                })
+            );
+        });
+
+        it("should handle service errors gracefully", async () => {
+            mockServiceClient.mockRejectedValueOnce(new Error("Service unavailable"));
+
+            // Test that the extension handles service errors
+            extension.retryFetchInitialScene();
+
+            // Wait for the async operation to complete
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(mockServiceClient).toHaveBeenCalled();
+            expect(extension.hasInitialScene()).toBe(false);
+        });
+
+        it("should track initial scene state", () => {
+            expect(extension.hasInitialScene()).toBe(false);
+
+            // Simulate having an initial scene
+            (extension as any).initialSceneFetched = true;
+            (extension as any).currentScene = createTestPlanningScene([]);
+
+            expect(extension.hasInitialScene()).toBe(true);
+        });
+
+        it("should handle malformed service responses", async () => {
+            mockServiceClient.mockResolvedValueOnce({ invalid: "response" });
+
+            extension.retryFetchInitialScene();
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(extension.hasInitialScene()).toBe(false);
+        });
+
+        it("should render primitive shapes from service response", async () => {
+            const boxObject = createTestCollisionObject("test_box");
+            const sphereObject = createTestCollisionObject("test_sphere");
+            sphereObject.primitives = [{ type: SolidPrimitiveType.SPHERE, dimensions: [0.5] }];
+
+            const sceneWithPrimitives = createTestPlanningScene([boxObject, sphereObject]);
+            const testResponse = { scene: sceneWithPrimitives };
+            mockServiceClient.mockResolvedValueOnce(testResponse);
+
+            // Setup a layer to enable message processing
+            (mockRenderer.config.layers as any)["test-layer"] = {
+                layerId: "foxglove.PlanningScene",
+                visible: true,
+                topic: "/planning_scene",
+            };
+
+            extension.retryFetchInitialScene();
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(extension.hasInitialScene()).toBe(true);
+            expect((extension as any).currentScene.world.collision_objects).toHaveLength(2);
+        });
+
+        it("should render mesh objects from service response", async () => {
+            const meshObject: CollisionObject = {
+                ...createTestCollisionObject("test_mesh"),
+                primitives: [],
+                primitive_poses: [],
+                meshes: [{
+                    vertices: [
+                        { x: 0, y: 0, z: 0 },
+                        { x: 1, y: 0, z: 0 },
+                        { x: 0.5, y: 1, z: 0 }
+                    ],
+                    triangles: [
+                        { vertex_indices: new Uint32Array([0, 1, 2]) }
+                    ],
+                }],
+                mesh_poses: [{ position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }],
+            };
+
+            const sceneWithMeshes = createTestPlanningScene([meshObject]);
+            const testResponse = { scene: sceneWithMeshes };
+            mockServiceClient.mockResolvedValueOnce(testResponse);
+
+            // Setup a layer to enable message processing
+            (mockRenderer.config.layers as any)["test-layer"] = {
+                layerId: "foxglove.PlanningScene",
+                visible: true,
+                topic: "/planning_scene",
+            };
+
+            extension.retryFetchInitialScene();
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(extension.hasInitialScene()).toBe(true);
+            const scene = (extension as any).currentScene;
+            expect(scene.world.collision_objects[0]?.meshes).toHaveLength(1);
+            expect(scene.world.collision_objects[0]?.meshes[0]?.vertices).toHaveLength(3);
+        });
+
+        it("should store octomap data from service response (rendering not implemented)", async () => {
+            const sceneWithOctomap = createTestPlanningScene([]);
+            sceneWithOctomap.world.octomap = {
+                header: { frame_id: "map", stamp: { sec: 1234, nsec: 567890 } },
+                origin: { position: { x: 1, y: 2, z: 3 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+                octomap: {
+                    header: { frame_id: "map", stamp: { sec: 1234, nsec: 567890 } },
+                    binary: true,
+                    id: "OcTree",
+                    resolution: 0.05,
+                    data: [1, 2, 3, 4, 5]
+                }
+            };
+
+            const testResponse = { scene: sceneWithOctomap };
+            mockServiceClient.mockResolvedValueOnce(testResponse);
+
+            // Setup a layer to enable message processing
+            (mockRenderer.config.layers as any)["test-layer"] = {
+                layerId: "foxglove.PlanningScene",
+                visible: true,
+                topic: "/planning_scene",
+            };
+
+            extension.retryFetchInitialScene();
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(extension.hasInitialScene()).toBe(true);
+            const scene = (extension as any).currentScene;
+            // Octomap data is stored but not processed for rendering (not yet implemented)
+            expect(scene.world.octomap.octomap.binary).toBe(true);
+            expect(scene.world.octomap.octomap.resolution).toBe(0.05);
+            expect(scene.world.octomap.octomap.data).toHaveLength(5);
+            // Verify that no renderables are created for octomap (since it's not implemented)
+            expect(extension.renderables.size).toBe(0);
+        });
+
+        it("should render mixed geometry from service response", async () => {
+            const mixedObject: CollisionObject = {
+                ...createTestCollisionObject("mixed_object"),
+                primitives: [
+                    { type: SolidPrimitiveType.BOX, dimensions: [1, 1, 1] },
+                    { type: SolidPrimitiveType.SPHERE, dimensions: [0.5] }
+                ],
+                primitive_poses: [
+                    { position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+                    { position: { x: 2, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }
+                ],
+                meshes: [{
+                    vertices: [{ x: 0, y: 0, z: 2 }, { x: 1, y: 0, z: 2 }, { x: 0.5, y: 1, z: 2 }],
+                    triangles: [{ vertex_indices: new Uint32Array([0, 1, 2]) }],
+                }],
+                mesh_poses: [{ position: { x: 0, y: 0, z: 2 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }],
+            };
+
+            const sceneWithMixedGeometry = createTestPlanningScene([mixedObject]);
+            const testResponse = { scene: sceneWithMixedGeometry };
+            mockServiceClient.mockResolvedValueOnce(testResponse);
+
+            // Setup a layer to enable message processing
+            (mockRenderer.config.layers as any)["test-layer"] = {
+                layerId: "foxglove.PlanningScene",
+                visible: true,
+                topic: "/planning_scene",
+            };
+
+            extension.retryFetchInitialScene();
+            await new Promise(resolve => setTimeout(resolve, 0));
+
+            expect(extension.hasInitialScene()).toBe(true);
+            const scene = (extension as any).currentScene;
+            const object = scene.world.collision_objects[0];
+            expect(object.primitives).toHaveLength(2);
+            expect(object.meshes).toHaveLength(1);
+            expect(object.primitives[0]?.type).toBe(SolidPrimitiveType.BOX);
+            expect(object.primitives[1]?.type).toBe(SolidPrimitiveType.SPHERE);
+        });
     });
 
-    it("should support service integration", () => {
-        // Test that the extension supports service client integration
-        expect(typeof extension.startFrame).toBe("function");
+    describe("Performance Optimizations", () => {
+        it("should reuse frustum culling objects", () => {
+            // Test that the extension has the performance optimization properties
+            expect((extension as any).frustum).toBeDefined();
+            expect((extension as any).cameraMatrix).toBeDefined();
+        });
 
+        it("should support geometry and material caching", () => {
+            const geometry = extension.getSharedGeometry("box", [1, 1, 1], () => new THREE.BufferGeometry());
+            expect(geometry).toBeDefined();
+
+            const material = extension.getSharedMaterial("#ffffff", 1.0);
+            expect(material).toBeDefined();
+        });
+    });
+
+    describe("Settings Persistence", () => {
+        it("should support settings persistence", () => {
+            // Test that the extension has settings persistence capability
+            expect(typeof extension.handleSettingsAction).toBe("function");
+            expect(typeof extension.settingsNodes).toBe("function");
+        });
+    });
+
+    describe("Message Processing", () => {
+        it("should handle empty collision object arrays", () => {
+            const emptyScene = createTestPlanningScene([]);
+
+            // Test that the extension can handle scenes with no collision objects
+            expect(emptyScene.world.collision_objects).toHaveLength(0);
+            expect(emptyScene.name).toBe("test_scene");
+        });
+
+        it("should handle objects with missing geometry", () => {
+            const emptyGeometryObject: CollisionObject = {
+                ...createTestCollisionObject("empty_object"),
+                primitives: [],
+                meshes: [],
+                planes: [],
+            };
+
+            expect(emptyGeometryObject.primitives).toHaveLength(0);
+            expect(emptyGeometryObject.meshes).toHaveLength(0);
+            expect(emptyGeometryObject.planes).toHaveLength(0);
+        });
+    });
+
+    describe("Rendering Tests", () => {
+        beforeEach(() => {
+            // Setup a layer to enable message processing
+            (mockRenderer.config.layers as any)["test-layer"] = {
+                layerId: "foxglove.PlanningScene",
+                visible: true,
+                topic: "/planning_scene",
+            };
+        });
+
+        it("should render mesh objects and create renderables", () => {
+            const meshObject: CollisionObject = {
+                ...createTestCollisionObject("test_mesh"),
+                primitives: [],
+                primitive_poses: [],
+                meshes: [{
+                    vertices: [
+                        { x: 0, y: 0, z: 0 },
+                        { x: 1, y: 0, z: 0 },
+                        { x: 0.5, y: 1, z: 0 }
+                    ],
+                    triangles: [
+                        { vertex_indices: new Uint32Array([0, 1, 2]) }
+                    ],
+                }],
+                mesh_poses: [{ position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } }],
+            };
+
+            const sceneWithMeshes = createTestPlanningScene([meshObject]);
+
+            // Simulate message processing by calling the handler directly
+            const messageEvent = {
+                topic: "/planning_scene",
+                receiveTime: { sec: 0, nsec: 0 },
+                message: sceneWithMeshes,
+                schemaName: "moveit_msgs/PlanningScene",
+                sizeInBytes: 1024,
+            };
+
+            // Get the message handler from subscriptions
+            const subscriptions = extension.getSubscriptions();
+            const handler = subscriptions[0]?.subscription.handler;
+            expect(handler).toBeDefined();
+
+            // Call the handler to process the message
+            handler!(messageEvent);
+
+            // Verify that renderables were created for mesh objects
+            expect(extension.renderables.size).toBe(1);
+            expect(extension.renderables.has("test_mesh")).toBe(true);
+        });
+
+        it("should render primitive shapes (implemented)", () => {
+            const boxObject = createTestCollisionObject("test_box");
+            const sphereObject = createTestCollisionObject("test_sphere");
+            sphereObject.primitives = [{ type: SolidPrimitiveType.SPHERE, dimensions: [0.5] }];
+
+            const sceneWithPrimitives = createTestPlanningScene([boxObject, sphereObject]);
+
+            // Simulate message processing
+            const messageEvent = {
+                topic: "/planning_scene",
+                receiveTime: { sec: 0, nsec: 0 },
+                message: sceneWithPrimitives,
+                schemaName: "moveit_msgs/PlanningScene",
+                sizeInBytes: 1024,
+            };
+
+            const subscriptions = extension.getSubscriptions();
+            const handler = subscriptions[0]?.subscription.handler;
+            expect(handler).toBeDefined();
+
+            // Call the handler to process the message
+            handler!(messageEvent);
+
+            // Verify that renderables were created for primitive shapes (they ARE implemented)
+            expect(extension.renderables.size).toBe(2);
+            expect(extension.renderables.has("test_box")).toBe(true);
+            expect(extension.renderables.has("test_sphere")).toBe(true);
+        });
+
+        it("should NOT render octomap (not implemented)", () => {
+            const sceneWithOctomap = createTestPlanningScene([]);
+            sceneWithOctomap.world.octomap = {
+                header: { frame_id: "map", stamp: { sec: 1234, nsec: 567890 } },
+                origin: { position: { x: 1, y: 2, z: 3 }, orientation: { x: 0, y: 0, z: 0, w: 1 } },
+                octomap: {
+                    header: { frame_id: "map", stamp: { sec: 1234, nsec: 567890 } },
+                    binary: true,
+                    id: "OcTree",
+                    resolution: 0.05,
+                    data: [1, 2, 3, 4, 5]
+                }
+            };
+
+            // Simulate message processing
+            const messageEvent = {
+                topic: "/planning_scene",
+                receiveTime: { sec: 0, nsec: 0 },
+                message: sceneWithOctomap,
+                schemaName: "moveit_msgs/PlanningScene",
+                sizeInBytes: 1024,
+            };
+
+            const subscriptions = extension.getSubscriptions();
+            const handler = subscriptions[0]?.subscription.handler;
+            expect(handler).toBeDefined();
+
+            // Call the handler to process the message
+            handler!(messageEvent);
+
+            // Verify that NO renderables were created for octomap (not implemented)
+            expect(extension.renderables.size).toBe(0);
+        });
     });
 });

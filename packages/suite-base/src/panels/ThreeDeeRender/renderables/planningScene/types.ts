@@ -235,7 +235,7 @@ export const GET_PLANNING_SCENE_DATATYPES = new Set<string>([
 
 // Default service and topic names
 export const DEFAULT_PLANNING_SCENE_SERVICE = "/get_planning_scene";
-export const DEFAULT_PLANNING_SCENE_TOPIC = "/planning_scene";
+export const DEFAULT_PLANNING_SCENE_TOPIC = "/move_group/monitored_planning_scene"; // This is used internally for reading by RViz. "/planning_scene" may not capture all updates.
 
 // Utility function to create default PlanningSceneComponents for service requests
 export function createDefaultPlanningSceneComponents(): PlanningSceneComponents {

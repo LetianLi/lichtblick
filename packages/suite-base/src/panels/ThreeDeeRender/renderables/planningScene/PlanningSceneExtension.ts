@@ -175,6 +175,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Helper method to extract color for a specific collision object from planning scene
   private getObjectColorFromScene(objectId: string): { color: string; opacity: number } | undefined {
     if (!this.currentScene?.object_colors) {
+      log.warn(`No object colors found for object ${objectId}`);
       return undefined;
     }
 
@@ -188,6 +189,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     // Ensure all color components are defined and valid
     if (r == undefined || g == undefined || b == undefined || a == undefined) {
+      log.warn(`Invalid color values for object ${objectId}: ${r}, ${g}, ${b}, ${a}`);
       return undefined;
     }
 
@@ -1143,19 +1145,49 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
       if (!this.fetchingInitialScene && !this.initialSceneFetched) {
         void this.fetchInitialScene();
+      } else {
+        this.replaceEntireScene(scene);
       }
 
-      // For now, treat this differential update as a full scene
-      // Once we have the base scene, future differentials will work properly
-      this.replaceEntireScene(scene);
       return;
     }
+
+    // Update current scene by merging the differential data first
+    // This ensures that color information and other data is available during processing
+    this.currentScene = this.mergeSceneData(this.currentScene, scene);
 
     // Process collision objects if present
     if (scene.world?.collision_objects) {
       for (const collisionObject of scene.world.collision_objects) {
         if (collisionObject) {
           this.applyCollisionObjectOperation(collisionObject);
+        }
+      }
+    }
+
+    // Handle color-only updates: if object_colors changed, update existing objects that aren't in collision_objects
+    if (scene.object_colors && scene.object_colors.length > 0) {
+      const processedObjectIds = new Set(
+        scene.world?.collision_objects?.map(obj => obj?.id).filter(Boolean) ?? []
+      );
+
+      for (const objectColor of scene.object_colors) {
+        if (!objectColor?.id) {
+          continue;
+        }
+
+        // Only update existing objects that weren't already processed above
+        if (!processedObjectIds.has(objectColor.id) && this.renderables.has(objectColor.id)) {
+          const existingRenderable = this.renderables.get(objectColor.id);
+          if (existingRenderable) {
+            // Update the color in userData and trigger visual update
+            const sceneColor = this.getObjectColorFromScene(objectColor.id);
+            if (sceneColor) {
+              existingRenderable.userData.settings.color = sceneColor.color;
+              existingRenderable.userData.settings.opacity = this.settings.sceneOpacity * sceneColor.opacity;
+              existingRenderable.update(existingRenderable.userData.collisionObject);
+            }
+          }
         }
       }
     }
@@ -1170,10 +1202,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Transform updates will be handled in future tasks
       log.info("Transform updates received (not yet implemented)");
     }
-
-    // Update current scene by merging the differential data
-    // This is a deep merge to preserve existing data while updating changed fields
-    this.currentScene = this.mergeSceneData(this.currentScene, scene);
   }
 
   // Process robot state including attached collision objects
@@ -1293,6 +1321,32 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         ...baseScene.robot_state,
         ...diffScene.robot_state,
       };
+    }
+
+    // Handle object_colors merging - merge colors instead of replacing the entire array
+    if (baseScene.object_colors || diffScene.object_colors) {
+      const baseColors = baseScene.object_colors ?? [];
+      const diffColors = diffScene.object_colors ?? [];
+
+      // Create a map of existing colors by object ID for efficient lookup
+      const colorMap = new Map<string, typeof baseColors[0]>();
+
+      // Add base colors to the map
+      for (const colorEntry of baseColors) {
+        if (colorEntry?.id) {
+          colorMap.set(colorEntry.id, colorEntry);
+        }
+      }
+
+      // Add/update with diff colors (this will overwrite existing colors for the same object ID)
+      for (const colorEntry of diffColors) {
+        if (colorEntry?.id) {
+          colorMap.set(colorEntry.id, colorEntry);
+        }
+      }
+
+      // Convert back to array
+      mergedScene.object_colors = Array.from(colorMap.values());
     }
 
     return mergedScene;
@@ -2154,6 +2208,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
         // Apply scene opacity multiplicatively
         renderable.userData.settings.opacity = newSceneOpacity * messageOpacity;
+        log.info(`Message opacity: ${messageOpacity}, New scene opacity: ${newSceneOpacity}, Renderable opacity: ${renderable.userData.settings.opacity}`);
 
         // Trigger visual update to apply new opacity
         renderable.update(renderable.userData.collisionObject);

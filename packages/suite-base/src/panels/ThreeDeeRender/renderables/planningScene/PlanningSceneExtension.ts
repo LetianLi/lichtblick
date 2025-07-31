@@ -7,6 +7,7 @@
 
 import * as _ from "lodash-es";
 import * as THREE from "three";
+import { t } from "i18next";
 
 import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
@@ -80,7 +81,7 @@ const DEFAULT_PLANNING_SCENE_SETTINGS: PlanningSceneSettings = {
 const DEFAULT_CUSTOM_SETTINGS: LayerSettingsPlanningScene = {
   visible: true,
   frameLocked: true,
-  label: "Planning Scene",
+  label: "Planning Scene", // This will be overridden with i18n in the constructor
   instanceId: "invalid",
   layerId: LAYER_ID,
   topic: DEFAULT_PLANNING_SCENE_TOPIC,
@@ -216,7 +217,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Register custom layer action (if available)
     renderer.addCustomLayerAction({
       layerId: LAYER_ID,
-      label: "Add Planning Scene",
+      label: t("threeDee:addPlanningScene"),
       icon: "PrecisionManufacturing",
       handler: this.#handleAddPlanningScene,
     });
@@ -414,10 +415,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
           // Validate mesh data
           if (meshData.vertices.length === 0) {
-            throw new Error("Mesh has no vertices");
+            throw new Error(t("threeDee:meshNoVertices"));
           }
           if (meshData.triangles.length === 0) {
-            throw new Error("Mesh has no triangles");
+            throw new Error(t("threeDee:meshNoTriangles"));
           }
 
           // Convert mesh data to THREE.js format
@@ -427,7 +428,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           // Add vertices with validation
           for (const vertex of meshData.vertices) {
             if (!Number.isFinite(vertex.x) || !Number.isFinite(vertex.y) || !Number.isFinite(vertex.z)) {
-              throw new Error("Invalid vertex data");
+              throw new Error(t("threeDee:invalidVertexData"));
             }
             vertices.push(vertex.x, vertex.y, vertex.z);
           }
@@ -525,42 +526,42 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
         const fields: SettingsTreeFields = {
           topic: {
-            label: "Topic",
+            label: t("threeDee:topic"),
             input: "autocomplete",
             value: config.topic ?? DEFAULT_CUSTOM_SETTINGS.topic,
             items: filterMap(this.renderer.topics ?? [], (_topic) =>
               PLANNING_SCENE_DATATYPES.has(_topic.schemaName) ? _topic.name : undefined,
             ),
-            help: "Planning scene topic to subscribe to",
+            help: t("threeDee:planningSceneTopic"),
           },
           defaultColor: {
-            label: "Default color",
+            label: t("threeDee:defaultColor"),
             input: "rgb",
             value: config.defaultColor ?? DEFAULT_CUSTOM_SETTINGS.defaultColor,
-            help: "Default color for collision objects without specified colors",
+            help: t("threeDee:defaultColorHelp"),
           },
           sceneOpacity: {
-            label: "Scene opacity",
+            label: t("threeDee:sceneOpacity"),
             input: "number",
             min: 0,
             max: 1,
             step: 0.1,
             precision: 1,
             value: config.sceneOpacity ?? DEFAULT_CUSTOM_SETTINGS.sceneOpacity,
-            help: "Opacity multiplier applied to all collision objects in the scene",
+            help: t("threeDee:sceneOpacityHelp"),
           },
           showCollisionObjects: {
-            label: "Show collision objects",
+            label: t("threeDee:showCollisionObjects"),
             input: "boolean",
             value: config.showCollisionObjects ?? DEFAULT_CUSTOM_SETTINGS.showCollisionObjects,
           },
           showAttachedObjects: {
-            label: "Show attached objects",
+            label: t("threeDee:showAttachedObjects"),
             input: "boolean",
             value: config.showAttachedObjects ?? DEFAULT_CUSTOM_SETTINGS.showAttachedObjects,
           },
           showOctomap: {
-            label: "Show octomap",
+            label: t("threeDee:showOctomap"),
             input: "boolean",
             value: config.showOctomap ?? DEFAULT_CUSTOM_SETTINGS.showOctomap,
           },
@@ -575,35 +576,35 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
         // Add service status information for this layer
         children.service = {
-          label: "Service Status",
+          label: t("threeDee:serviceStatus"),
           fields: {
             serviceName: {
-              label: "Service",
+              label: t("threeDee:service"),
               input: "string",
               readonly: true,
               value: DEFAULT_PLANNING_SCENE_SERVICE,
-              help: "ROS service used to fetch the initial planning scene",
+              help: t("threeDee:serviceHelp"),
             },
             topic: {
-              label: "Topic",
+              label: t("threeDee:topic"),
               input: "string",
               readonly: true,
               value: config.topic ?? DEFAULT_CUSTOM_SETTINGS.topic,
-              help: "Planning scene topic to subscribe to",
+              help: t("threeDee:planningSceneTopic"),
             },
             status: {
-              label: "Initial scene",
+              label: t("threeDee:initialScene"),
               input: "string",
               readonly: true,
-              value: this.initialSceneFetched ? "Loaded" : this.fetchingInitialScene ? "Loading..." : "Not loaded",
-              help: "Status of the initial planning scene fetch",
+              value: this.initialSceneFetched ? t("threeDee:loaded") : this.fetchingInitialScene ? t("threeDee:loading") : t("threeDee:notLoaded"),
+              help: t("threeDee:initialSceneHelp"),
             },
           },
           actions: [
             {
               type: "action" as const,
               id: "refetchService",
-              label: "Refetch",
+              label: t("threeDee:refetch"),
             },
           ],
           error: serviceError,
@@ -612,7 +613,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         // Add collision objects section for this layer
         if (this.renderables.size > 0) {
           children.collisionObjects = {
-            label: `Collision Objects (${this.renderables.size})`,
+            label: `${t("threeDee:showCollisionObjects")} (${this.renderables.size})`,
             children: this.getCollisionObjectNodes(),
             defaultExpansionState: "collapsed" as const,
           };
@@ -621,13 +622,13 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         entries.push({
           path: layerPath,
           node: {
-            label: config.label ?? "Planning Scene",
+            label: config.label ?? t("threeDee:planningScene"),
             icon: "PrecisionManufacturing",
             fields,
             visible: config.visible ?? DEFAULT_CUSTOM_SETTINGS.visible,
             actions: [
-              { type: "action", id: "refetch", label: "Refetch" },
-              { type: "action", id: "delete", label: "Delete" },
+              { type: "action", id: "refetch", label: t("threeDee:refetch") },
+              { type: "action", id: "delete", label: t("threeDee:delete") },
             ],
             order: layerConfig.order,
             handler: this.#handleLayerSettingsAction,
@@ -662,16 +663,16 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
       const fields: SettingsTreeFields = {
         frameId: {
-          label: "Frame ID",
+          label: t("threeDee:frameId"),
           input: "string",
           readonly: true,
           value: userData.frameId,
         },
         shapeCount: {
-          label: "Shapes",
+          label: t("threeDee:shapes"),
           input: "string",
           readonly: true,
-          value: totalShapes > 0 ? shapeInfo.join(", ") : "No shapes",
+          value: totalShapes > 0 ? shapeInfo.join(", ") : t("threeDee:noShapes"),
         },
       };
 
@@ -680,21 +681,21 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       if (hasMultipleTypes) {
         if (primitiveCount > 0) {
           fields.showPrimitives = {
-            label: "Show primitives",
+            label: t("threeDee:showPrimitives"),
             input: "boolean",
             value: settings.showPrimitives,
           };
         }
         if (meshCount > 0) {
           fields.showMeshes = {
-            label: "Show meshes",
+            label: t("threeDee:showMeshes"),
             input: "boolean",
             value: settings.showMeshes,
           };
         }
         if (planeCount > 0) {
           fields.showPlanes = {
-            label: "Show planes",
+            label: t("threeDee:showPlanes"),
             input: "boolean",
             value: settings.showPlanes,
           };
@@ -1021,7 +1022,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   private async fetchInitialScene(): Promise<void> {
     // Check if service client is available
     if (!this.serviceClient) {
-      const errorMessage = "Service client not available - cannot fetch initial planning scene. Make sure you are connected to a ROS system with the planning scene service.";
+      const errorMessage = t("threeDee:serviceClientUnavailable");
       log.warn(errorMessage);
 
       // Report error to settings tree
@@ -1087,7 +1088,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Validate the scene structure
       const isValid = this.validatePlanningSceneMessage(scene, DEFAULT_PLANNING_SCENE_SERVICE);
       if (!isValid) {
-        throw new Error("Invalid planning scene data received from service - see message processing errors for details");
+        throw new Error(t("threeDee:invalidPlanningSceneData"));
       }
 
       log.info("Successfully fetched initial planning scene from service");
@@ -1538,7 +1539,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   private applyCollisionObjectOperation(object: PartialMessage<CollisionObject>): void {
     // Validate required fields
     if (object.id == undefined) {
-      const errorMessage = "Collision object missing required 'id' field, cannot process operation";
+      const errorMessage = t("threeDee:collisionObjectMissingId");
       log.warn(errorMessage);
 
       // Report error to settings tree (use a generic path since we don't have an ID)
@@ -1972,7 +1973,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Helper function to ensure a partial pose becomes a full pose
   private ensureFullPose(partialPose: PartialMessage<CollisionObject>['pose']): Pose {
     if (!partialPose) {
-      throw new Error("Pose is required");
+      throw new Error(t("threeDee:poseRequired"));
     }
 
     return {
@@ -1993,7 +1994,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Helper function to ensure a partial header becomes a full header
   private ensureFullHeader(partialHeader: PartialMessage<CollisionObject>['header']): Header {
     if (!partialHeader) {
-      throw new Error("Header is required");
+      throw new Error(t("threeDee:headerRequired"));
     }
 
     return {
@@ -2099,7 +2100,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Check if a planning scene already exists
     const existingPlanningSceneId = this.findFirstPlanningSceneInstanceId();
     if (existingPlanningSceneId) {
-      const errorMessage = "Only one planning scene can exist at a time. Please delete the existing planning scene before adding a new one.";
+      const errorMessage = t("threeDee:onlyOnePlanningSceneAllowed");
       log.warn(errorMessage);
 
       // Display error message to user if available
@@ -2123,6 +2124,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const config: LayerSettingsPlanningScene = {
       ...DEFAULT_CUSTOM_SETTINGS,
       instanceId,
+      label: t("threeDee:planningScene"), // Use i18n for the default label
       topic: this.topic || DEFAULT_PLANNING_SCENE_TOPIC, // Use current topic or default
     };
 

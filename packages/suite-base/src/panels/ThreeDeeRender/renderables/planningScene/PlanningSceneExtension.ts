@@ -616,6 +616,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
             label: `${t("threeDee:showCollisionObjects")} (${this.renderables.size})`,
             children: this.getCollisionObjectNodes(),
             defaultExpansionState: "collapsed" as const,
+            actions: [
+              { id: "show-all", type: "action", label: t("threeDee:showAll") },
+              { id: "hide-all", type: "action", label: t("threeDee:hideAll") },
+            ],
           };
         }
 
@@ -2095,6 +2099,34 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     return undefined;
   }
 
+  // Helper method to toggle visibility of all collision objects for a specific layer instance
+  #toggleCollisionObjectsVisibility(instanceId: string, visible: boolean): void {
+    // Update all collision objects for this layer instance
+    for (const [objectId, renderable] of this.renderables.entries()) {
+      // Check if this collision object belongs to the specified layer instance
+      const objectInstanceId = this.findInstanceIdForCollisionObject(objectId);
+      if (objectInstanceId === instanceId) {
+        renderable.userData.settings.visible = visible;
+      }
+    }
+
+    // Update the configuration to persist the changes
+    this.renderer.updateConfig((draft) => {
+      const layerConfig = draft.layers[instanceId] as LayerSettingsPlanningScene | undefined;
+      if (layerConfig?.collisionObjects) {
+        for (const objectId of Object.keys(layerConfig.collisionObjects)) {
+          if (!layerConfig.collisionObjects[objectId]) {
+            layerConfig.collisionObjects[objectId] = {};
+          }
+          (layerConfig.collisionObjects[objectId] as Record<string, unknown>).visible = visible;
+        }
+      }
+    });
+
+    // Update the settings tree to reflect the changes
+    this.updateSettingsTree();
+  }
+
   // Custom layer handlers
   #handleAddPlanningScene = (instanceId: string): void => {
     // Check if a planning scene already exists
@@ -2164,6 +2196,16 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       } else if (action.payload.id === "refetch") {
         // Refetch the planning scene
         this.retryFetchInitialScene();
+      }
+    } else if (action.action === "perform-node-action" && path.length === 3 && path[2] === "collisionObjects") {
+      // Handle collision objects show-all/hide-all actions
+      const instanceId = path[1]!;
+      if (action.payload.id === "show-all") {
+        // Show all collision objects
+        this.#toggleCollisionObjectsVisibility(instanceId, true);
+      } else if (action.payload.id === "hide-all") {
+        // Hide all collision objects
+        this.#toggleCollisionObjectsVisibility(instanceId, false);
       }
     } else if (action.action === "perform-node-action") {
       // Handle service retry action for custom layers

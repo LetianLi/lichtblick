@@ -1040,6 +1040,12 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     this.fetchingInitialScene = true;
 
+    // Try to recover settings
+    this.currentInstanceId = this.findFirstPlanningSceneInstanceId();
+    if (this.currentInstanceId) {
+      this.settings = this.loadSettingsFromConfig(this.currentInstanceId);
+    }
+
     try {
       // Clear any previous service errors
       this.renderer.settings.errors.remove(
@@ -1673,7 +1679,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const objectColor = sceneColor?.color ?? this.settings.defaultColor;
 
       // Get saved settings for this collision object from configuration
-      const instanceId = this.currentInstanceId;
+      const instanceId = this.findInstanceIdForCollisionObject(objectId) ?? this.currentInstanceId;
       const layerConfig = instanceId ? this.renderer.config.layers[instanceId] as Partial<LayerSettingsPlanningScene> | undefined : undefined;
       const savedObjectSettings = layerConfig?.collisionObjects?.[objectId];
 
@@ -2090,6 +2096,30 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
   // Custom layer handlers
   #handleAddPlanningScene = (instanceId: string): void => {
+    // Check if a planning scene already exists
+    const existingPlanningSceneId = this.findFirstPlanningSceneInstanceId();
+    if (existingPlanningSceneId) {
+      const errorMessage = "Only one planning scene can exist at a time. Please delete the existing planning scene before adding a new one.";
+      log.warn(errorMessage);
+
+      // Display error message to user if available
+      if (this.renderer.displayTemporaryError) {
+        try {
+          // Use setTimeout to ensure the error is displayed after the current execution context
+          setTimeout(() => {
+            this.renderer.displayTemporaryError!(errorMessage);
+            log.info("Successfully called displayTemporaryError with message:", errorMessage);
+          }, 0);
+        } catch (error) {
+          log.error("Error calling displayTemporaryError:", error);
+        }
+      } else {
+        log.warn("No displayTemporaryError function available to display error message");
+      }
+
+      return; // Exit early without creating a new planning scene
+    }
+
     const config: LayerSettingsPlanningScene = {
       ...DEFAULT_CUSTOM_SETTINGS,
       instanceId,

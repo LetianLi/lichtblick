@@ -5,9 +5,9 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
+import { t } from "i18next";
 import * as _ from "lodash-es";
 import * as THREE from "three";
-import { t } from "i18next";
 
 import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
@@ -75,7 +75,7 @@ const DEFAULT_PLANNING_SCENE_SETTINGS: PlanningSceneSettings = {
   sceneOpacity: 1.0,
   showCollisionObjects: true,
   showAttachedObjects: true,
-  showOctomap: true,
+  showOctomap: false,
 };
 
 const DEFAULT_CUSTOM_SETTINGS: LayerSettingsPlanningScene = {
@@ -89,7 +89,7 @@ const DEFAULT_CUSTOM_SETTINGS: LayerSettingsPlanningScene = {
   sceneOpacity: 1.0,
   showCollisionObjects: true,
   showAttachedObjects: true,
-  showOctomap: true,
+  showOctomap: false,
 };
 
 const log = Logger.getLogger(__filename);
@@ -218,7 +218,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     renderer.addCustomLayerAction({
       layerId: LAYER_ID,
       label: t("threeDee:addPlanningScene"),
-      icon: "PrecisionManufacturing",
+      icon: "Cube",
       handler: this.#handleAddPlanningScene,
     });
 
@@ -513,6 +513,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     super.dispose();
   }
 
+  public override handleSettingsAction = (action: SettingsTreeAction): void => {
+    this.#handleLayerSettingsAction(action);
+  };
+
   public override settingsNodes(): SettingsTreeEntry[] {
     const entries: SettingsTreeEntry[] = [];
 
@@ -564,6 +568,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
             label: t("threeDee:showOctomap"),
             input: "boolean",
             value: config.showOctomap ?? DEFAULT_CUSTOM_SETTINGS.showOctomap,
+            help: t("threeDee:octomapNotImplementedHelp"),
           },
         };
 
@@ -627,7 +632,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           path: layerPath,
           node: {
             label: config.label ?? t("threeDee:planningScene"),
-            icon: "PrecisionManufacturing",
+            icon: "Cube",
             fields,
             visible: config.visible ?? DEFAULT_CUSTOM_SETTINGS.visible,
             actions: [
@@ -2100,6 +2105,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Helper method to toggle visibility of all collision objects for a specific layer instance
+  // eslint-disable-next-line @lichtblick/no-boolean-parameters
   #toggleCollisionObjectsVisibility(instanceId: string, visible: boolean): void {
     // Update all collision objects for this layer instance
     for (const [objectId, renderable] of this.renderables.entries()) {
@@ -2290,6 +2296,18 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     } else if (fieldName === "showCollisionObjects") {
       // Visibility will be recalculated in the next frame by startFrame()
       // No need to manually update all objects here
+    } else if (fieldName === "showOctomap") {
+      // Check if user is trying to enable octomap
+      if (value === true) {
+        // Show temporary error and revert the setting
+        this.renderer.displayTemporaryError!(t("threeDee:octomapNotImplemented"));
+
+        // Revert the setting back to false
+        this.saveSetting(path, false);
+
+        // Update the settings tree to reflect the reverted value
+        this.updateSettingsTree();
+      }
     } else if (fieldName === "topic") {
       // Topic changed - clear current scene and refetch from new topic
       const newTopic = value as string;

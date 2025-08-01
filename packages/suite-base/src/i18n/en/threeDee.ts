@@ -126,6 +126,8 @@ export const threeDee = {
   meshNoVertices: "Mesh has no vertices",
   meshNoTriangles: "Mesh has no triangles",
   invalidVertexData: "Invalid vertex data",
+  octomapNotImplemented: "Octomap rendering is not yet implemented.",
+  octomapNotImplementedHelp: "Octomap rendering is not yet implemented. The closest substitute is the Occupancy Grid.",
 
   // Image annotations
   imageAnnotations: "Image annotations",

@@ -115,9 +115,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Performance optimization: Track object hashes for differential updates
   private objectHashes = new Map<string, string>();
 
-  // Performance optimization: Geometry sharing cache
-  private geometryCache = new Map<string, THREE.BufferGeometry>();
-
   // Performance optimization: Material sharing cache for identical colors/transparency
   private materialCache = new Map<string, THREE.MeshStandardMaterial>();
 
@@ -315,25 +312,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     return false;
   }
 
-  // Generate geometry cache key for sharing identical shapes to improve performance
-  private generateGeometryKey(type: string, dimensions: number[]): string {
-    // Round dimensions to avoid floating point precision issues
-    const roundedDims = dimensions.map(d => Math.round(d * 1000) / 1000);
-    return `${type}_${roundedDims.join('_')}`;
-  }
 
-  // Get or create shared geometry to improve performance by reusing identical shapes
-  public getSharedGeometry(type: string, dimensions: number[], createGeometry: () => THREE.BufferGeometry): THREE.BufferGeometry {
-    const key = this.generateGeometryKey(type, dimensions);
-
-    let geometry = this.geometryCache.get(key);
-    if (!geometry) {
-      geometry = createGeometry();
-      this.geometryCache.set(key, geometry);
-    }
-
-    return geometry;
-  }
 
   // Performance optimization: Get or create shared material for identical colors/transparency
   public getSharedMaterial(color: string, opacity: number): THREE.MeshStandardMaterial {
@@ -473,12 +452,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   public override dispose(): void {
     // Clear performance optimization caches
     this.objectHashes.clear();
-
-    // Dispose shared geometries
-    for (const geometry of this.geometryCache.values()) {
-      geometry.dispose();
-    }
-    this.geometryCache.clear();
 
     // Dispose shared materials
     for (const material of this.materialCache.values()) {
@@ -1698,7 +1671,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Performance optimization: Set extension reference for performance optimizations
       renderable.setExtension({
         loadMeshResource: this.loadMeshResource.bind(this),
-        getSharedGeometry: this.getSharedGeometry.bind(this),
         getSharedMaterial: this.getSharedMaterial.bind(this),
       });
 
@@ -1930,7 +1902,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     totalObjects: number;
     visibleObjects: number;
     hiddenObjects: number;
-    cachedGeometries: number;
     cachedMaterials: number;
     cachedMeshes: number;
     objectHashes: number;
@@ -1941,7 +1912,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       totalObjects: this.renderables.size,
       visibleObjects: this.visibleObjectCount,
       hiddenObjects,
-      cachedGeometries: this.geometryCache.size,
       cachedMaterials: this.materialCache.size,
       cachedMeshes: this.meshResourceCache.size,
       objectHashes: this.objectHashes.size,

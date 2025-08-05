@@ -182,21 +182,13 @@ describe("PlanningSceneExtension", () => {
                 totalObjects: 0,
                 visibleObjects: 0,
                 hiddenObjects: 0,
-                cachedGeometries: 0,
                 cachedMaterials: 0,
                 cachedMeshes: 0,
                 objectHashes: 0,
             });
         });
 
-        it("supports geometry caching", () => {
-            const geometry = extension.getSharedGeometry("box", [1, 1, 1], () => new THREE.BufferGeometry());
-            expect(geometry).toBeInstanceOf(THREE.BufferGeometry);
 
-            // Should return same instance for same parameters
-            const geometry2 = extension.getSharedGeometry("box", [1, 1, 1], () => new THREE.BufferGeometry());
-            expect(geometry2).toBe(geometry);
-        });
 
         it("supports material caching", () => {
             const material = extension.getSharedMaterial("#ffffff", 1.0);

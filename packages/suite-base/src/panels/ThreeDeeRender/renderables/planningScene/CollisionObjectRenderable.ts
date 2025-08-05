@@ -57,7 +57,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
   // Performance optimization: Reference to extension for performance optimizations
   private extension?: {
     loadMeshResource: (meshData: Mesh) => Promise<THREE.BufferGeometry>;
-    getSharedGeometry: (type: string, dimensions: number[], createGeometry: () => THREE.BufferGeometry) => THREE.BufferGeometry;
     getSharedMaterial: (color: string, opacity: number) => THREE.MeshStandardMaterial;
   };
 
@@ -69,7 +68,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
   // Set reference to extension for performance optimizations
   public setExtension(extension: {
     loadMeshResource: (meshData: Mesh) => Promise<THREE.BufferGeometry>;
-    getSharedGeometry: (type: string, dimensions: number[], createGeometry: () => THREE.BufferGeometry) => THREE.BufferGeometry;
     getSharedMaterial: (color: string, opacity: number) => THREE.MeshStandardMaterial;
   }): void {
     this.extension = extension;
@@ -168,21 +166,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           default: {
             log.warn(`Unsupported primitive type ${primitive.type} at index ${i} in collision object '${this.userData.collisionObject.id}', skipping`);
             continue; // Skip unsupported primitives
-          }
-        }
-
-        // Use shared geometry for identical primitive shapes to improve performance
-        if (this.extension?.getSharedGeometry) {
-          // Use shared geometry to reduce memory usage for identical shapes
-          const geometryType = this.getGeometryTypeForPrimitive(primitive.type);
-          if (geometryType) {
-            const sharedGeometry = this.extension.getSharedGeometry(
-              geometryType,
-              dimensions,
-              () => this.createGeometryForPrimitive(primitive.type, dimensions)
-            );
-            // Apply shared geometry to the shape if it supports it
-            this.applySharedGeometry(shape, sharedGeometry);
           }
         }
 
@@ -504,58 +487,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
 
   public override idFromMessage(): string {
     return this.userData.collisionObject.id;
-  }
-
-  // Helper methods for geometry sharing to improve performance
-  private getGeometryTypeForPrimitive(primitiveType: SolidPrimitiveType): string | undefined {
-    switch (primitiveType) {
-      case SolidPrimitiveType.BOX:
-        return "box";
-      case SolidPrimitiveType.SPHERE:
-        return "sphere";
-      case SolidPrimitiveType.CYLINDER:
-        return "cylinder";
-      case SolidPrimitiveType.CONE:
-        return "cone";
-      default:
-        return undefined;
-    }
-  }
-
-  private createGeometryForPrimitive(primitiveType: SolidPrimitiveType, dimensions: number[]): THREE.BufferGeometry {
-    switch (primitiveType) {
-      case SolidPrimitiveType.BOX: {
-        const x = dimensions[SolidPrimitiveDimension.BOX_X] ?? 1;
-        const y = dimensions[SolidPrimitiveDimension.BOX_Y] ?? 1;
-        const z = dimensions[SolidPrimitiveDimension.BOX_Z] ?? 1;
-        return new THREE.BoxGeometry(x, y, z);
-      }
-      case SolidPrimitiveType.SPHERE: {
-        const radius = dimensions[SolidPrimitiveDimension.SPHERE_RADIUS] ?? 0.5;
-        return new THREE.SphereGeometry(radius, 32, 16);
-      }
-      case SolidPrimitiveType.CYLINDER: {
-        const height = dimensions[SolidPrimitiveDimension.CYLINDER_HEIGHT] ?? 1;
-        const radius = dimensions[SolidPrimitiveDimension.CYLINDER_RADIUS] ?? 0.5;
-        return new THREE.CylinderGeometry(radius, radius, height, 32);
-      }
-      case SolidPrimitiveType.CONE: {
-        const height = dimensions[SolidPrimitiveDimension.CONE_HEIGHT] ?? 1;
-        const radius = dimensions[SolidPrimitiveDimension.CONE_RADIUS] ?? 0.5;
-        return new THREE.ConeGeometry(radius, height, 32);
-      }
-      default:
-        throw new Error(`Unsupported primitive type for geometry creation: ${primitiveType}`);
-    }
-  }
-
-  private applySharedGeometry(_shape: Renderable, _sharedGeometry: THREE.BufferGeometry): void {
-    // This method would apply shared geometry to the renderable if it supports it
-    // For now, we rely on the individual renderable classes to handle geometry sharing
-    // This is a placeholder for future optimization where renderables could accept pre-built geometries
-
-    // Note: The actual geometry sharing happens at the THREE.js level within each renderable class
-    // when they create their geometries. This method is here for future extensibility.
   }
 
   public override details(): Record<string, RosValue> {

@@ -18,6 +18,7 @@ import {
   Plane,
   normalizeVertexIndices,
   normalizeDimensions,
+  SolidPrimitiveDimension,
 } from "./types";
 import type { IRenderer } from "../../IRenderer";
 import { BaseUserData, Renderable } from "../../Renderable";
@@ -416,23 +417,20 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
 
     switch (type) {
       case MarkerType.CUBE: {
-        // Box dimensions: [x, y, z]
-        scale.x = dimensions[0] ?? 1;
-        scale.y = dimensions[1] ?? 1;
-        scale.z = dimensions[2] ?? 1;
+        scale.x = dimensions[SolidPrimitiveDimension.BOX_X] ?? 1;
+        scale.y = dimensions[SolidPrimitiveDimension.BOX_Y] ?? 1;
+        scale.z = dimensions[SolidPrimitiveDimension.BOX_Z] ?? 1;
         break;
       }
       case MarkerType.SPHERE: {
-        // Sphere dimensions: [radius]
-        const radius = dimensions[0] ?? 0.5;
+        const radius = dimensions[SolidPrimitiveDimension.SPHERE_RADIUS] ?? 0.5;
         scale.x = scale.y = scale.z = radius * 2; // Diameter
         break;
       }
       case MarkerType.CYLINDER: {
-        // Cylinder dimensions: [height, radius]
         // Also used for cones since there's no CONE marker type
-        const height = dimensions[0] ?? 1;
-        const radius = dimensions[1] ?? 0.5;
+        const height = dimensions[SolidPrimitiveDimension.CYLINDER_HEIGHT] ?? 1;
+        const radius = dimensions[SolidPrimitiveDimension.CYLINDER_RADIUS] ?? 0.5;
         scale.x = scale.y = radius * 2; // Diameter for x and y
         scale.z = height; // Height along z-axis
         break;
@@ -527,19 +525,23 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
   private createGeometryForPrimitive(primitiveType: SolidPrimitiveType, dimensions: number[]): THREE.BufferGeometry {
     switch (primitiveType) {
       case SolidPrimitiveType.BOX: {
-        const [x = 1, y = 1, z = 1] = dimensions;
+        const x = dimensions[SolidPrimitiveDimension.BOX_X] ?? 1;
+        const y = dimensions[SolidPrimitiveDimension.BOX_Y] ?? 1;
+        const z = dimensions[SolidPrimitiveDimension.BOX_Z] ?? 1;
         return new THREE.BoxGeometry(x, y, z);
       }
       case SolidPrimitiveType.SPHERE: {
-        const [radius = 0.5] = dimensions;
+        const radius = dimensions[SolidPrimitiveDimension.SPHERE_RADIUS] ?? 0.5;
         return new THREE.SphereGeometry(radius, 32, 16);
       }
       case SolidPrimitiveType.CYLINDER: {
-        const [height = 1, radius = 0.5] = dimensions;
+        const height = dimensions[SolidPrimitiveDimension.CYLINDER_HEIGHT] ?? 1;
+        const radius = dimensions[SolidPrimitiveDimension.CYLINDER_RADIUS] ?? 0.5;
         return new THREE.CylinderGeometry(radius, radius, height, 32);
       }
       case SolidPrimitiveType.CONE: {
-        const [height = 1, radius = 0.5] = dimensions;
+        const height = dimensions[SolidPrimitiveDimension.CONE_HEIGHT] ?? 1;
+        const radius = dimensions[SolidPrimitiveDimension.CONE_RADIUS] ?? 0.5;
         return new THREE.ConeGeometry(radius, height, 32);
       }
       default:

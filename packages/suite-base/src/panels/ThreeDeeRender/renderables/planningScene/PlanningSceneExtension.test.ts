@@ -695,7 +695,7 @@ describe("PlanningSceneExtension", () => {
                 detach_posture: {
                     header: { frame_id: "base_link", stamp: { sec: 0, nsec: 0 } },
                     joint_names: ["joint1"],
-                    points: [{ positions: [0.5], velocities: [], accelerations: [], effort: [], time_from_start: 1000 }],
+                    points: [{ positions: [0.5], velocities: [], accelerations: [], effort: [], time_from_start: { sec: 0, nsec: 0 } }],
                 },
                 weight: 0.8,
             };

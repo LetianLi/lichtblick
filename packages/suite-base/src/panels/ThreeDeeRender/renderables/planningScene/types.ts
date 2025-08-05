@@ -287,3 +287,21 @@ export function normalizeDimensions(dimensions: unknown): number[] {
   }
   return [];
 }
+
+/**
+ * Get the dimension names for a solid primitive type, useful for error messages and documentation
+ */
+export function getSolidPrimitiveDimensionNames(primitiveType: SolidPrimitiveType): string[] {
+  switch (primitiveType) {
+    case SolidPrimitiveType.BOX:
+      return ["x", "y", "z"];
+    case SolidPrimitiveType.SPHERE:
+      return ["radius"];
+    case SolidPrimitiveType.CYLINDER:
+      return ["height", "radius"];
+    case SolidPrimitiveType.CONE:
+      return ["height", "radius"];
+    default:
+      return ["dimensions"];
+  }
+}

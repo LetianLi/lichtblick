@@ -19,6 +19,7 @@ import {
   normalizeVertexIndices,
   normalizeDimensions,
   SolidPrimitiveDimension,
+  getSolidPrimitiveDimensionNames,
 } from "./types";
 import type { IRenderer } from "../../IRenderer";
 import { BaseUserData, Renderable } from "../../Renderable";
@@ -137,34 +138,48 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         switch (primitive.type) {
           case SolidPrimitiveType.BOX: {
             if (dimensions.length < 3) {
-              throw new Error(`Box primitive at index ${i} requires 3 dimensions [x, y, z], got ${dimensions.length}`);
+              const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
+              throw new Error(
+                `Box primitive at index ${i} requires 3 dimensions [${expectedDims.join(", ")}], got ${dimensions.length}`,
+              );
             }
             shape = this.createBoxShape(dimensions);
             break;
           }
           case SolidPrimitiveType.SPHERE: {
             if (dimensions.length < 1) {
-              throw new Error(`Sphere primitive at index ${i} requires 1 dimension [radius], got ${dimensions.length}`);
+              const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
+              throw new Error(
+                `Sphere primitive at index ${i} requires 1 dimension [${expectedDims.join(", ")}], got ${dimensions.length}`,
+              );
             }
             shape = this.createSphereShape(dimensions);
             break;
           }
           case SolidPrimitiveType.CYLINDER: {
             if (dimensions.length < 2) {
-              throw new Error(`Cylinder primitive at index ${i} requires 2 dimensions [height, radius], got ${dimensions.length}`);
+              const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
+              throw new Error(
+                `Cylinder primitive at index ${i} requires 2 dimensions [${expectedDims.join(", ")}], got ${dimensions.length}`,
+              );
             }
             shape = this.createCylinderShape(dimensions);
             break;
           }
           case SolidPrimitiveType.CONE: {
             if (dimensions.length < 2) {
-              throw new Error(`Cone primitive at index ${i} requires 2 dimensions [height, radius], got ${dimensions.length}`);
+              const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
+              throw new Error(
+                `Cone primitive at index ${i} requires 2 dimensions [${expectedDims.join(", ")}], got ${dimensions.length}`,
+              );
             }
             shape = this.createConeShape(dimensions);
             break;
           }
           default: {
-            log.warn(`Unsupported primitive type ${primitive.type} at index ${i} in collision object '${this.userData.collisionObject.id}', skipping`);
+            log.warn(
+              `Unsupported primitive type ${primitive.type} at index ${i} in collision object '${this.userData.collisionObject.id}', skipping`,
+            );
             continue; // Skip unsupported primitives
           }
         }

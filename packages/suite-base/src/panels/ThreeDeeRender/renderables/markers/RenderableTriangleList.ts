@@ -155,7 +155,7 @@ export class RenderableTriangleList extends RenderableMarker {
       // Only create outline if we have valid geometry with vertices
       if (vertexCount > 0 && geometry.attributes.position && geometry.attributes.position.count > 0) {
         this.#outline.geometry.dispose();
-        this.#outline.geometry = new THREE.EdgesGeometry(geometry);
+        this.#outline.geometry = new THREE.EdgesGeometry(geometry, 40);
       }
     }
 

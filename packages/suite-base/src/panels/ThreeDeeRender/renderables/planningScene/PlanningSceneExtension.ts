@@ -19,7 +19,6 @@ import {
   PlanningScene,
   GetPlanningSceneRequest,
   GetPlanningSceneResponse,
-  createDefaultPlanningSceneComponents,
   DEFAULT_PLANNING_SCENE_SERVICE,
   DEFAULT_PLANNING_SCENE_TOPIC,
   PLANNING_SCENE_DATATYPES,
@@ -30,6 +29,7 @@ import {
   SolidPrimitiveType,
   RobotState,
   AttachedCollisionObject,
+  createMinimalPlanningSceneComponents,
 } from "./types";
 import type { IRenderer, AnyRendererSubscription } from "../../IRenderer";
 import { Renderable } from "../../Renderable";
@@ -1011,7 +1011,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       );
 
       const request: GetPlanningSceneRequest = {
-        components: createDefaultPlanningSceneComponents(),
+        components: createMinimalPlanningSceneComponents(),
       };
 
       log.info(`Fetching initial planning scene from service: ${DEFAULT_PLANNING_SCENE_SERVICE}`);
@@ -1159,12 +1159,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     if (scene.robot_state) {
       this.processRobotState(scene.robot_state, scene);
     }
-
-    // Process transform updates if present
-    if (scene.fixed_frame_transforms) {
-      // Transform updates will be handled in future tasks
-      log.info("Transform updates received (not yet implemented)");
-    }
   }
 
   // Process robot state including attached collision objects
@@ -1176,16 +1170,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           this.processAttachedCollisionObject(attachedObject, scene);
         }
       }
-    }
-
-    // Joint state processing could be added here in the future
-    if (robotState.joint_state) {
-      log.info("Joint state processing (not yet implemented)");
-    }
-
-    // Multi-DOF joint state processing could be added here in the future
-    if (robotState.multi_dof_joint_state) {
-      log.info("Multi-DOF joint state processing (not yet implemented)");
     }
   }
 
@@ -1243,11 +1227,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Process robot state if present
     if (scene.robot_state) {
       this.processRobotState(scene.robot_state, scene);
-    }
-
-    // Process other scene components as needed
-    if (scene.fixed_frame_transforms) {
-      log.info("Fixed frame transforms processing (not yet implemented)");
     }
   }
 

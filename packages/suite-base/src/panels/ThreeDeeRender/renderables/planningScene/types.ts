@@ -225,19 +225,20 @@ export const GET_PLANNING_SCENE_DATATYPES = new Set<string>([
 export const DEFAULT_PLANNING_SCENE_SERVICE = "/get_planning_scene";
 export const DEFAULT_PLANNING_SCENE_TOPIC = "/move_group/monitored_planning_scene"; // This is used internally for reading by RViz. "/planning_scene" may not capture all updates.
 
-// Utility function to create default PlanningSceneComponents for service requests
-export function createDefaultPlanningSceneComponents(): PlanningSceneComponents {
+// Utility function to create minimal PlanningSceneComponents for service requests
+// Only requests the components we actually use to reduce data transfer and processing
+export function createMinimalPlanningSceneComponents(): PlanningSceneComponents {
   return {
     components:
       PlanningSceneComponentsMask.SCENE_SETTINGS |
-      PlanningSceneComponentsMask.ROBOT_STATE |
+      // PlanningSceneComponentsMask.ROBOT_STATE |
       PlanningSceneComponentsMask.ROBOT_STATE_ATTACHED_OBJECTS |
       PlanningSceneComponentsMask.WORLD_OBJECT_NAMES |
       PlanningSceneComponentsMask.WORLD_OBJECT_GEOMETRY |
-      PlanningSceneComponentsMask.OCTOMAP |
-      PlanningSceneComponentsMask.TRANSFORMS |
-      PlanningSceneComponentsMask.ALLOWED_COLLISION_MATRIX |
-      PlanningSceneComponentsMask.LINK_PADDING_AND_SCALING |
+      // PlanningSceneComponentsMask.OCTOMAP |
+      // PlanningSceneComponentsMask.TRANSFORMS |
+      // PlanningSceneComponentsMask.ALLOWED_COLLISION_MATRIX |
+      // PlanningSceneComponentsMask.LINK_PADDING_AND_SCALING |
       PlanningSceneComponentsMask.OBJECT_COLORS,
   };
 }

@@ -127,10 +127,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Performance monitoring: Track visible object count for optimization insights
   private visibleObjectCount = 0;
 
-  // Performance optimization: Reusable objects for frustum culling
-  private frustum = new THREE.Frustum();
-  private cameraMatrix = new THREE.Matrix4();
-
   // Helper method to find the instance ID for a given topic
   private findInstanceIdForTopic(topic: string): string | undefined {
 
@@ -914,11 +910,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Add PlanningScene-specific logic after base processing
     this.visibleObjectCount = 0;
 
-    // Performance optimization: Get camera frustum for frustum culling
-    const camera = this.renderer.cameraHandler.getActiveCamera();
-    this.cameraMatrix.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse);
-    this.frustum.setFromProjectionMatrix(this.cameraMatrix);
-
     // Apply additional PlanningScene-specific visibility logic
     for (const collisionObject of this.renderables.values()) {
       // Skip if already invisible from base class processing
@@ -944,23 +935,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       if (!layerAllowsVisibility) {
         collisionObject.visible = false;
         continue;
-      }
-
-      // Performance optimization: Frustum culling - skip objects outside camera view
-      // Only perform frustum culling if the object has been positioned (has valid world matrix)
-      if (!collisionObject.matrixWorldNeedsUpdate) {
-        // Create a bounding sphere for the collision object
-        const boundingSphere = new THREE.Sphere();
-        collisionObject.getWorldPosition(boundingSphere.center);
-
-        // Estimate radius based on collision object size (rough approximation)
-        const scale = collisionObject.getWorldScale(new THREE.Vector3());
-        boundingSphere.radius = Math.max(scale.x, scale.y, scale.z) * 2; // Conservative estimate
-
-        // Skip if outside frustum
-        if (!this.frustum.intersectsSphere(boundingSphere)) {
-          continue;
-        }
       }
 
       this.visibleObjectCount++;
@@ -1960,12 +1934,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     cachedMaterials: number;
     cachedMeshes: number;
     objectHashes: number;
-    cullingSavings: string;
   } {
     const hiddenObjects = this.renderables.size - this.visibleObjectCount;
-    const cullingSavings = this.renderables.size > 0
-      ? `${Math.round((hiddenObjects / this.renderables.size) * 100)}%`
-      : "0%";
 
     return {
       totalObjects: this.renderables.size,
@@ -1975,7 +1945,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       cachedMaterials: this.materialCache.size,
       cachedMeshes: this.meshResourceCache.size,
       objectHashes: this.objectHashes.size,
-      cullingSavings,
     };
   }
 

@@ -186,7 +186,6 @@ describe("PlanningSceneExtension", () => {
                 cachedMaterials: 0,
                 cachedMeshes: 0,
                 objectHashes: 0,
-                cullingSavings: "0%",
             });
         });
 

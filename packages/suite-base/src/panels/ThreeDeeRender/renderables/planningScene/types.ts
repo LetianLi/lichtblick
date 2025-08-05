@@ -7,13 +7,22 @@
 
 import { Duration } from "@lichtblick/rostime";
 
-import type { Header, Point, TransformStamped, Vector3, JointState, ColorRGBA, Transform } from "../../ros";
+import type {
+  Header,
+  Point,
+  TransformStamped,
+  Vector3,
+  JointState,
+  ColorRGBA,
+  Transform,
+} from "../../ros";
 import type { Pose } from "../../transforms/geometry";
 
 // MoveIt Planning Scene Message Types
 // Based on Noetic moveit_msgs/PlanningScene and related message definitions
 
-export type PlanningScene = { // moveit_msgs/PlanningScene
+export type PlanningScene = {
+  // moveit_msgs/PlanningScene
   name: string; // Name of planning scene
   robot_state: RobotState; // Full robot state
   robot_model_name: string; // Name of the robot model this scene is for
@@ -26,14 +35,16 @@ export type PlanningScene = { // moveit_msgs/PlanningScene
   is_diff: boolean; // If this scene is a diff w.r.t. another scene
 };
 
-export type RobotState = { // moveit_msgs/RobotState
+export type RobotState = {
+  // moveit_msgs/RobotState
   joint_state: JointState; // Positions of robot joints
   multi_dof_joint_state: MultiDOFJointState; // Multi-DOF joints
   attached_collision_objects: AttachedCollisionObject[]; // Attached collision objects
   is_diff: boolean; // If this state is a diff w.r.t. another state. Mostly for handling attached bodies (whether to clear them before updating with this msg)
 };
 
-export type MultiDOFJointState = { // sensor_msgs/MultiDOFJointState
+export type MultiDOFJointState = {
+  // sensor_msgs/MultiDOFJointState
   header: Header; // Header for time/frame
   joint_names: string[]; // Names of multi-DOF joints
   transforms: Transform[]; // Transforms for each joint, or empty if not applicable
@@ -41,17 +52,20 @@ export type MultiDOFJointState = { // sensor_msgs/MultiDOFJointState
   wrench: Wrench[]; // Wrench for each joint, or empty if not applicable
 };
 
-export type Twist = { // geometry_msgs/Twist: Velocity in free space
+export type Twist = {
+  // geometry_msgs/Twist: Velocity in free space
   linear: Vector3; // Linear velocity
   angular: Vector3; // Angular velocity
 };
 
-export type Wrench = { // geometry_msgs/Wrench: Force in free space
+export type Wrench = {
+  // geometry_msgs/Wrench: Force in free space
   force: Vector3; // Force vector
   torque: Vector3; // Torque vector
 };
 
-export type AttachedCollisionObject = { // moveit_msgs/AttachedCollisionObject
+export type AttachedCollisionObject = {
+  // moveit_msgs/AttachedCollisionObject
   link_name: string; // Link to which the object is attached
   object: CollisionObject; // The actual collision object with shapes and poses
   touch_links: string[]; // Links allowed to touch the object (link_name is already defaulted)
@@ -59,7 +73,8 @@ export type AttachedCollisionObject = { // moveit_msgs/AttachedCollisionObject
   weight: number; // Weight of the attached object
 };
 
-export type CollisionObject = { // moveit_msgs/CollisionObject
+export type CollisionObject = {
+  // moveit_msgs/CollisionObject
   header: Header; // Header, used for interpreting the poses
   pose: Pose; // The object's pose relative to the header frame. All shapes and subframes are relative to this pose
   id: string; // Object id (name used in MoveIt)
@@ -75,12 +90,14 @@ export type CollisionObject = { // moveit_msgs/CollisionObject
   operation: CollisionObjectOperation; // Operation to be performed
 };
 
-export type ObjectType = { // object_recognition_msgs/ObjectType
+export type ObjectType = {
+  // object_recognition_msgs/ObjectType
   key: string; // The key of the found object: the unique identifier in the given db
   db: string; // The db parameters stored as a JSON/compressed YAML string.
 };
 
-export type SolidPrimitive = { // shape_msgs/SolidPrimitive
+export type SolidPrimitive = {
+  // shape_msgs/SolidPrimitive
   type: SolidPrimitiveType; // Type of primitive
   dimensions: Float64Array | number[]; // Dimensions of the shape, with bouding boxes centered around 0,0,0
 };
@@ -105,16 +122,19 @@ export enum SolidPrimitiveDimension {
 }
 /* eslint-enable @typescript-eslint/no-duplicate-enum-values */
 
-export type Mesh = { // shape_msgs/Mesh
+export type Mesh = {
+  // shape_msgs/Mesh
   triangles: MeshTriangle[]; // Mesh triangles; Index values refer to positions in vertices array
   vertices: Point[]; // The actual vertices of the mesh
 };
 
-export type MeshTriangle = { // shape_msgs/MeshTriangle
+export type MeshTriangle = {
+  // shape_msgs/MeshTriangle
   vertex_indices: Uint32Array; // Definition of a triangle's vertices. Indices refer to parent vertices array.
 };
 
-export type Plane = { // shape_msgs/Plane
+export type Plane = {
+  // shape_msgs/Plane
   coef: [number, number, number, number] | (Float64Array & { length: 4 }); // Plane equation coefficients: ax + by + cz + d = 0
 };
 
@@ -125,13 +145,15 @@ export enum CollisionObjectOperation {
   MOVE = 3, // Move an existing object (geometry arrays must be empty)
 }
 
-export type JointTrajectory = { // trajectory_msgs/JointTrajectory
+export type JointTrajectory = {
+  // trajectory_msgs/JointTrajectory
   header: Header; // Header for time/frame
   joint_names: string[]; // Names of the joints for this trajectory
   points: JointTrajectoryPoint[]; // Trajectory points
 };
 
-export type JointTrajectoryPoint = { // trajectory_msgs/JointTrajectoryPoint
+export type JointTrajectoryPoint = {
+  // trajectory_msgs/JointTrajectoryPoint
   positions: Float64Array | number[]; // Position for each joint at this trajectory waypoint
   velocities: Float64Array | number[]; // Velocity for each joint, or empty if not used
   accelerations: Float64Array | number[]; // Acceleration for each joint, or empty if not used
@@ -139,44 +161,52 @@ export type JointTrajectoryPoint = { // trajectory_msgs/JointTrajectoryPoint
   time_from_start: Duration; // Time from start of trajectory to reach this point
 };
 
-export type AllowedCollisionMatrix = { // moveit_msgs/AllowedCollisionMatrix
+export type AllowedCollisionMatrix = {
+  // moveit_msgs/AllowedCollisionMatrix
   entry_names: string[]; // List of entry names in the matrix
   entry_values: AllowedCollisionEntry[]; // Individual entries (should be square, symmetric, and same order)
   default_entry_names: string[]; // Names for default entries.
   default_entry_values: boolean[]; // Default values for each entry name. Used if name(s) could only be found in default names.
 };
 
-export type AllowedCollisionEntry = { // moveit_msgs/AllowedCollisionEntry
+export type AllowedCollisionEntry = {
+  // moveit_msgs/AllowedCollisionEntry
   enabled: boolean[]; // Whether collision checking is enabled
 };
 
-export type LinkPadding = { // moveit_msgs/LinkPadding
+export type LinkPadding = {
+  // moveit_msgs/LinkPadding
   link_name: string; // Name for the link
   padding: number; // Padding to apply to the link
 };
 
-export type LinkScale = { // moveit_msgs/LinkScale
+export type LinkScale = {
+  // moveit_msgs/LinkScale
   link_name: string; // Name for the link
   scale: number; // Scaling to apply to the link
 };
 
-export type ObjectColor = { // moveit_msgs/ObjectColor
+export type ObjectColor = {
+  // moveit_msgs/ObjectColor
   id: string; // Object id for which color is specified
   color: ColorRGBA; // Color value
 };
 
-export type PlanningSceneWorld = { // moveit_msgs/PlanningSceneWorld
+export type PlanningSceneWorld = {
+  // moveit_msgs/PlanningSceneWorld
   collision_objects: CollisionObject[]; // Collision objects
   octomap: OctomapWithPose; // Octomap representing additional collision data
 };
 
-export type OctomapWithPose = { // octomap_msgs/OctomapWithPose: A 3D map in binary format, as Octree
+export type OctomapWithPose = {
+  // octomap_msgs/OctomapWithPose: A 3D map in binary format, as Octree
   header: Header;
   origin: Pose; // Pose of the octree w.r.t. header frame
   octomap: Octomap; // The actual octree msg
 };
 
-export type Octomap = { // octomap_msgs/Octomap: A 3D map in binary format, as Octree
+export type Octomap = {
+  // octomap_msgs/Octomap: A 3D map in binary format, as Octree
   header: Header;
   binary: boolean; // Flag to denote a binary (only free/occupied) or full occupancy octree (.bt/.ot file)
   id: string; // Class id of the contained octree
@@ -185,15 +215,18 @@ export type Octomap = { // octomap_msgs/Octomap: A 3D map in binary format, as O
 };
 
 // Service Types
-export type GetPlanningSceneRequest = { // moveit_msgs/GetPlanningScene
+export type GetPlanningSceneRequest = {
+  // moveit_msgs/GetPlanningScene
   components: PlanningSceneComponents;
 };
 
-export type GetPlanningSceneResponse = { // moveit_msgs/GetPlanningScene
+export type GetPlanningSceneResponse = {
+  // moveit_msgs/GetPlanningScene
   scene: PlanningScene;
 };
 
-export type PlanningSceneComponents = { // moveit_msgs/PlanningSceneComponents
+export type PlanningSceneComponents = {
+  // moveit_msgs/PlanningSceneComponents
   components: number; // uint32 bitmask of PlanningSceneComponentsMask values specifying which parts of the PlanningScene message are of interest (0 fetches all)
 };
 
@@ -265,7 +298,7 @@ export function normalizeVertexIndices(indices: unknown): number[] {
     return Array.from(indices);
   }
   // Handle other typed arrays or array-like objects
-  if (typeof indices === 'object' && 'length' in indices) {
+  if (typeof indices === "object" && "length" in indices) {
     return Array.from(indices as ArrayLike<number>).map(Number);
   }
   return [];
@@ -282,7 +315,7 @@ export function normalizeDimensions(dimensions: unknown): number[] {
     return Array.from(dimensions);
   }
   // Handle other typed arrays or array-like objects
-  if (typeof dimensions === 'object' && 'length' in dimensions) {
+  if (typeof dimensions === "object" && "length" in dimensions) {
     return Array.from(dimensions as ArrayLike<number>).map(Number);
   }
   return [];

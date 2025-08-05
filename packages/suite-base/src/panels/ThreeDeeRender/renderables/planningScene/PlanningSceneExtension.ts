@@ -14,7 +14,11 @@ import Logger from "@lichtblick/log";
 import { toNanoSec } from "@lichtblick/rostime";
 import { SettingsTreeAction, SettingsTreeFields, SettingsTreeChildren } from "@lichtblick/suite";
 
-import { CollisionObjectRenderable, CollisionObjectUserData, CollisionObjectSettings } from "./CollisionObjectRenderable";
+import {
+  CollisionObjectRenderable,
+  CollisionObjectUserData,
+  CollisionObjectSettings,
+} from "./CollisionObjectRenderable";
 import {
   PlanningScene,
   GetPlanningSceneRequest,
@@ -126,7 +130,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
   // Helper method to find the instance ID for a given topic
   private findInstanceIdForTopic(topic: string): string | undefined {
-
     // First try to find a layer with matching topic
     for (const [instanceId, layerConfig] of Object.entries(this.renderer.config.layers)) {
       if (layerConfig?.layerId === LAYER_ID) {
@@ -154,27 +157,33 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       return DEFAULT_PLANNING_SCENE_SETTINGS;
     }
 
-    const layerConfig = this.renderer.config.layers[instanceId] as Partial<LayerSettingsPlanningScene>;
+    const layerConfig = this.renderer.config.layers[
+      instanceId
+    ] as Partial<LayerSettingsPlanningScene>;
 
     return {
       visible: layerConfig.visible ?? DEFAULT_PLANNING_SCENE_SETTINGS.visible,
       defaultColor: layerConfig.defaultColor ?? DEFAULT_PLANNING_SCENE_SETTINGS.defaultColor,
       sceneOpacity: layerConfig.sceneOpacity ?? DEFAULT_PLANNING_SCENE_SETTINGS.sceneOpacity,
-      showCollisionObjects: layerConfig.showCollisionObjects ?? DEFAULT_PLANNING_SCENE_SETTINGS.showCollisionObjects,
-      showAttachedObjects: layerConfig.showAttachedObjects ?? DEFAULT_PLANNING_SCENE_SETTINGS.showAttachedObjects,
+      showCollisionObjects:
+        layerConfig.showCollisionObjects ?? DEFAULT_PLANNING_SCENE_SETTINGS.showCollisionObjects,
+      showAttachedObjects:
+        layerConfig.showAttachedObjects ?? DEFAULT_PLANNING_SCENE_SETTINGS.showAttachedObjects,
       showOctomap: layerConfig.showOctomap ?? DEFAULT_PLANNING_SCENE_SETTINGS.showOctomap,
     };
   }
 
   // Helper method to extract color for a specific collision object from planning scene
-  private getObjectColorFromScene(objectId: string): { color: string; opacity: number } | undefined {
+  private getObjectColorFromScene(
+    objectId: string,
+  ): { color: string; opacity: number } | undefined {
     if (!this.currentScene?.object_colors) {
       log.warn(`No object colors found for object ${objectId}`);
       return undefined;
     }
 
     // Find the color for this specific object ID
-    const objectColor = this.currentScene.object_colors.find(oc => oc?.id === objectId);
+    const objectColor = this.currentScene.object_colors.find((oc) => oc?.id === objectId);
     if (!objectColor?.color) {
       return undefined;
     }
@@ -188,9 +197,15 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     }
 
     // Convert RGBA values (0-1) to hex color string
-    const rHex = Math.round(r * 255).toString(16).padStart(2, '0');
-    const gHex = Math.round(g * 255).toString(16).padStart(2, '0');
-    const bHex = Math.round(b * 255).toString(16).padStart(2, '0');
+    const rHex = Math.round(r * 255)
+      .toString(16)
+      .padStart(2, "0");
+    const gHex = Math.round(g * 255)
+      .toString(16)
+      .padStart(2, "0");
+    const bHex = Math.round(b * 255)
+      .toString(16)
+      .padStart(2, "0");
     const color = `#${rHex}${gHex}${bHex}`;
 
     return {
@@ -202,7 +217,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   public constructor(
     renderer: IRenderer,
     serviceClient?: (service: string, request: unknown) => Promise<unknown>,
-    name: string = PlanningSceneExtension.extensionId
+    name: string = PlanningSceneExtension.extensionId,
   ) {
     super(name, renderer);
     this.serviceClient = serviceClient;
@@ -216,7 +231,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     });
 
     // Load existing planning scene layers from the config (if available)
-    const planningSceneLayers = Object.entries(renderer.config.layers).filter(([, entry]) => entry?.layerId === LAYER_ID);
+    const planningSceneLayers = Object.entries(renderer.config.layers).filter(
+      ([, entry]) => entry?.layerId === LAYER_ID,
+    );
 
     for (const [instanceId, entry] of planningSceneLayers) {
       this.#updatePlanningSceneLayer(instanceId, entry as Partial<LayerSettingsPlanningScene>);
@@ -227,11 +244,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   private computeObjectHash(object: CollisionObject): string {
     // Create a hash based on object properties that affect rendering
     // Use a more efficient hash computation to avoid JSON.stringify overhead
-    const parts: string[] = [
-      object.id,
-      String(object.operation),
-      object.header.frame_id,
-    ];
+    const parts: string[] = [object.id, String(object.operation), object.header.frame_id];
 
     // Round pose values to avoid floating point precision issues
     const roundedPose = {
@@ -243,20 +256,24 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       qz: Math.round(object.pose.orientation.z * 1000) / 1000,
       qw: Math.round(object.pose.orientation.w * 1000) / 1000,
     };
-    parts.push(`${roundedPose.x},${roundedPose.y},${roundedPose.z},${roundedPose.qx},${roundedPose.qy},${roundedPose.qz},${roundedPose.qw}`);
+    parts.push(
+      `${roundedPose.x},${roundedPose.y},${roundedPose.z},${roundedPose.qx},${roundedPose.qy},${roundedPose.qz},${roundedPose.qw}`,
+    );
 
     // Hash primitives with rounded dimensions
     for (let i = 0; i < object.primitives.length; i++) {
       const p = object.primitives[i];
       const pose = object.primitive_poses[i];
       if (p && pose) {
-        const roundedDims = p.dimensions.map(d => Math.round(d * 1000) / 1000);
+        const roundedDims = p.dimensions.map((d) => Math.round(d * 1000) / 1000);
         const roundedPrimPose = {
           x: Math.round(pose.position.x * 1000) / 1000,
           y: Math.round(pose.position.y * 1000) / 1000,
           z: Math.round(pose.position.z * 1000) / 1000,
         };
-        parts.push(`p${i}:${p.type}:${roundedDims.join(',')}:${roundedPrimPose.x},${roundedPrimPose.y},${roundedPrimPose.z}`);
+        parts.push(
+          `p${i}:${p.type}:${roundedDims.join(",")}:${roundedPrimPose.x},${roundedPrimPose.y},${roundedPrimPose.z}`,
+        );
       }
     }
 
@@ -279,7 +296,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           y: Math.round(pose.position.y * 1000) / 1000,
           z: Math.round(pose.position.z * 1000) / 1000,
         };
-        parts.push(`m${i}:${structureHash}:${roundedMeshPose.x},${roundedMeshPose.y},${roundedMeshPose.z}`);
+        parts.push(
+          `m${i}:${structureHash}:${roundedMeshPose.x},${roundedMeshPose.y},${roundedMeshPose.z}`,
+        );
       }
     }
 
@@ -296,7 +315,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       }
     }
 
-    return parts.join('|');
+    return parts.join("|");
   }
 
   // Check if object has changed since last update for performance optimization
@@ -311,8 +330,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     return false;
   }
-
-
 
   // Performance optimization: Get or create shared material for identical colors/transparency
   public getSharedMaterial(color: string, opacity: number): THREE.MeshStandardMaterial {
@@ -402,7 +419,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
           // Add vertices with validation
           for (const vertex of meshData.vertices) {
-            if (!Number.isFinite(vertex.x) || !Number.isFinite(vertex.y) || !Number.isFinite(vertex.z)) {
+            if (
+              !Number.isFinite(vertex.x) ||
+              !Number.isFinite(vertex.y) ||
+              !Number.isFinite(vertex.z)
+            ) {
               throw new Error(t("threeDee:invalidVertexData"));
             }
             vertices.push(vertex.x, vertex.y, vertex.z);
@@ -417,26 +438,33 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
             // Accept both regular arrays and typed arrays (like Uint32Array from ROS)
             const vertexIndices = triangle.vertex_indices;
-            const isArrayLike = Array.isArray(vertexIndices) ||
-              (typeof vertexIndices === 'object' &&
-                'length' in vertexIndices &&
-                typeof (vertexIndices as ArrayLike<unknown>).length === 'number');
+            const isArrayLike =
+              Array.isArray(vertexIndices) ||
+              (typeof vertexIndices === "object" &&
+                "length" in vertexIndices &&
+                typeof (vertexIndices as ArrayLike<unknown>).length === "number");
 
             if (!isArrayLike) {
-              throw new Error(`Triangle at index ${j} has vertex_indices that is not an array or array-like: ${typeof triangle.vertex_indices}`);
+              throw new Error(
+                `Triangle at index ${j} has vertex_indices that is not an array or array-like: ${typeof triangle.vertex_indices}`,
+              );
             }
             if ((vertexIndices as ArrayLike<unknown>).length !== 3) {
-              throw new Error(`Triangle at index ${j} has ${(vertexIndices as ArrayLike<unknown>).length} vertex indices, expected 3`);
+              throw new Error(
+                `Triangle at index ${j} has ${(vertexIndices as ArrayLike<unknown>).length} vertex indices, expected 3`,
+              );
             }
             for (const index of triangle.vertex_indices) {
               if (!Number.isInteger(index) || index < 0 || index >= meshData.vertices.length) {
-                throw new Error(`Triangle at index ${j} has invalid vertex index: ${index} (must be 0-${meshData.vertices.length - 1})`);
+                throw new Error(
+                  `Triangle at index ${j} has invalid vertex index: ${index} (must be 0-${meshData.vertices.length - 1})`,
+                );
               }
             }
             indices.push(...triangle.vertex_indices);
           }
 
-          geometry.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3));
+          geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
           geometry.setIndex(indices);
           geometry.computeVertexNormals();
           geometry.computeBoundingSphere();
@@ -543,8 +571,14 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
         // Add Service Status and Collision Objects sections to each custom layer
         const layerPath = ["layers", instanceId];
-        const serviceError = this.renderer.settings.errors.errors.errorAtPath([...layerPath, "service"]);
-        const messageError = this.renderer.settings.errors.errors.errorAtPath([...layerPath, "messageProcessing"]);
+        const serviceError = this.renderer.settings.errors.errors.errorAtPath([
+          ...layerPath,
+          "service",
+        ]);
+        const messageError = this.renderer.settings.errors.errors.errorAtPath([
+          ...layerPath,
+          "messageProcessing",
+        ]);
 
         const children: SettingsTreeChildren = {};
 
@@ -570,7 +604,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
               label: t("threeDee:initialScene"),
               input: "string",
               readonly: true,
-              value: this.initialSceneFetched ? t("threeDee:loaded") : this.fetchingInitialScene ? t("threeDee:loading") : t("threeDee:notLoaded"),
+              value: this.initialSceneFetched
+                ? t("threeDee:loaded")
+                : this.fetchingInitialScene
+                  ? t("threeDee:loading")
+                  : t("threeDee:notLoaded"),
               help: t("threeDee:initialSceneHelp"),
             },
           },
@@ -635,9 +673,15 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const totalShapes = primitiveCount + meshCount + planeCount;
 
       const shapeInfo = [];
-      if (primitiveCount > 0) { shapeInfo.push(`${primitiveCount} primitive${primitiveCount !== 1 ? 's' : ''}`); }
-      if (meshCount > 0) { shapeInfo.push(`${meshCount} mesh${meshCount !== 1 ? 'es' : ''}`); }
-      if (planeCount > 0) { shapeInfo.push(`${planeCount} plane${planeCount !== 1 ? 's' : ''}`); }
+      if (primitiveCount > 0) {
+        shapeInfo.push(`${primitiveCount} primitive${primitiveCount !== 1 ? "s" : ""}`);
+      }
+      if (meshCount > 0) {
+        shapeInfo.push(`${meshCount} mesh${meshCount !== 1 ? "es" : ""}`);
+      }
+      if (planeCount > 0) {
+        shapeInfo.push(`${planeCount} plane${planeCount !== 1 ? "s" : ""}`);
+      }
 
       const fields: SettingsTreeFields = {
         frameId: {
@@ -655,7 +699,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       };
 
       // Add shape type visibility controls if there are multiple types
-      const hasMultipleTypes = [primitiveCount, meshCount, planeCount].filter(count => count > 0).length > 1;
+      const hasMultipleTypes =
+        [primitiveCount, meshCount, planeCount].filter((count) => count > 0).length > 1;
       if (hasMultipleTypes) {
         if (primitiveCount > 0) {
           fields.showPrimitives = {
@@ -681,10 +726,15 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       }
 
       // Get transform error for this object
-      const transformError = this.renderer.settings.errors.errors.errorAtPath(userData.settingsPath);
+      const transformError = this.renderer.settings.errors.errors.errorAtPath(
+        userData.settingsPath,
+      );
 
       // Get shape creation errors for this object
-      const shapeErrors = this.renderer.settings.errors.errors.errorAtPath([...userData.settingsPath, "shapes"]);
+      const shapeErrors = this.renderer.settings.errors.errors.errorAtPath([
+        ...userData.settingsPath,
+        "shapes",
+      ]);
 
       // Combine errors if both exist
       let combinedError = transformError;
@@ -713,7 +763,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
   // Note: handleExtensionSettingsUpdate method removed since all settings are now in Custom Layers
 
-  private handleCollisionObjectSettingsUpdate(objectId: string, input: string, value: unknown): void {
+  private handleCollisionObjectSettingsUpdate(
+    objectId: string,
+    input: string,
+    value: unknown,
+  ): void {
     const renderable = this.renderables.get(objectId);
     if (!renderable) {
       return;
@@ -724,7 +778,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Update the renderable settings
     switch (input) {
       case "visible":
-
         settings.visible = value as boolean;
         // Recalculate visibility based on all layers (will be done in next frame)
         // Don't set renderable.visible directly here, let startFrame() handle it
@@ -755,7 +808,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Find the instance ID for this collision object
     const instanceId = this.findInstanceIdForCollisionObject(objectId);
     if (!instanceId) {
-
       return; // Can't save without knowing which layer instance this belongs to
     }
 
@@ -766,7 +818,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // CRITICAL: Do not create a new layer if it doesn't exist!
       // This was causing layer duplication
       if (!draft.layers[instanceId]) {
-        log.error(`Layer ${instanceId} does not exist in config! Cannot save collision object setting.`);
+        log.error(
+          `Layer ${instanceId} does not exist in config! Cannot save collision object setting.`,
+        );
         return; // Exit early to prevent creating duplicate layers
       }
 
@@ -782,7 +836,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
       // Save the specific setting
       (layerConfig.collisionObjects[objectId] as Record<string, unknown>)[input] = value;
-
     });
 
     // Update the settings tree to reflect the changes
@@ -795,7 +848,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     if (this.currentInstanceId) {
       // Verify this instance actually exists in the config
       if (this.renderer.config.layers[this.currentInstanceId]?.layerId === LAYER_ID) {
-
         return this.currentInstanceId;
       }
     }
@@ -806,7 +858,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const instanceId = renderable.userData.settingsPath[1]!;
       // Verify this instance exists in the config
       if (this.renderer.config.layers[instanceId]?.layerId === LAYER_ID) {
-
         return instanceId;
       }
     }
@@ -814,7 +865,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Method 3: Find the first available planning scene layer
     for (const [instanceId, layerConfig] of Object.entries(this.renderer.config.layers)) {
       if (layerConfig?.layerId === LAYER_ID) {
-
         return instanceId;
       }
     }
@@ -859,11 +909,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     renderFrameId: AnyFrameId,
     fixedFrameId: AnyFrameId,
   ): void {
-
     // Fetch initial scene if we haven't done so yet and we're not already fetching
     // Only fetch if there are visible planning scene layers configured
-    const hasVisibleLayers = Object.values(this.renderer.config.layers).some(layer =>
-      layer?.layerId === LAYER_ID && layer.visible === true
+    const hasVisibleLayers = Object.values(this.renderer.config.layers).some(
+      (layer) => layer?.layerId === LAYER_ID && layer.visible === true,
     );
 
     if (!this.initialSceneFetched && !this.fetchingInitialScene && hasVisibleLayers) {
@@ -920,7 +969,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const topic = messageEvent.topic;
 
     // Check if there are any planning scene layers configured at all
-    const hasConfiguredLayers = Object.values(this.renderer.config.layers).some(layer => layer?.layerId === LAYER_ID);
+    const hasConfiguredLayers = Object.values(this.renderer.config.layers).some(
+      (layer) => layer?.layerId === LAYER_ID,
+    );
 
     if (!hasConfiguredLayers) {
       // No planning scene layers configured, ignore the message
@@ -930,10 +981,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Update message context for creating renderables
     this.topic = topic;
     this.receiveTime = toNanoSec(messageEvent.receiveTime);
-    this.messageTime = messageEvent.message.robot_state?.joint_state?.header?.stamp ?
-      BigInt(messageEvent.message.robot_state.joint_state.header.stamp.sec ?? 0) * 1000000000n +
-      BigInt(messageEvent.message.robot_state.joint_state.header.stamp.nsec ?? 0) :
-      toNanoSec(messageEvent.receiveTime);
+    this.messageTime = messageEvent.message.robot_state?.joint_state?.header?.stamp
+      ? BigInt(messageEvent.message.robot_state.joint_state.header.stamp.sec ?? 0) * 1000000000n +
+        BigInt(messageEvent.message.robot_state.joint_state.header.stamp.nsec ?? 0)
+      : toNanoSec(messageEvent.receiveTime);
 
     // Find the instance ID for this topic
     this.currentInstanceId = this.findInstanceIdForTopic(topic);
@@ -950,7 +1001,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Clear any previous message processing errors
       this.renderer.settings.errors.remove(
         ["extensions", PlanningSceneExtension.extensionId, "messageProcessing"],
-        MESSAGE_PROCESSING_ERROR
+        MESSAGE_PROCESSING_ERROR,
       );
 
       if (scene.is_diff === true) {
@@ -961,15 +1012,16 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         this.replaceEntireScene(scene);
       }
     } catch (error) {
-      const errorMessage = `Failed to process planning scene message from topic "${topic}": ${error instanceof Error ? error.message : String(error)
-        }`;
+      const errorMessage = `Failed to process planning scene message from topic "${topic}": ${
+        error instanceof Error ? error.message : String(error)
+      }`;
       log.warn(errorMessage);
 
       // Report error to settings tree
       this.renderer.settings.errors.add(
         ["extensions", PlanningSceneExtension.extensionId, "messageProcessing"],
         MESSAGE_PROCESSING_ERROR,
-        errorMessage
+        errorMessage,
       );
     }
   };
@@ -985,7 +1037,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.renderer.settings.errors.add(
         ["extensions", PlanningSceneExtension.extensionId, "service"],
         SERVICE_ERROR,
-        errorMessage
+        errorMessage,
       );
       return;
     }
@@ -1007,7 +1059,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Clear any previous service errors
       this.renderer.settings.errors.remove(
         ["extensions", PlanningSceneExtension.extensionId, "service"],
-        SERVICE_ERROR
+        SERVICE_ERROR,
       );
 
       const request: GetPlanningSceneRequest = {
@@ -1020,25 +1072,33 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
       this.pendingServiceCall = this.serviceClient(DEFAULT_PLANNING_SCENE_SERVICE, request);
 
-      const response = await this.pendingServiceCall as GetPlanningSceneResponse | undefined;
+      const response = (await this.pendingServiceCall) as GetPlanningSceneResponse | undefined;
 
       // Validate the response structure with detailed error messages
       if (response == undefined) {
-        throw new Error(`Service '${DEFAULT_PLANNING_SCENE_SERVICE}' returned null or undefined response`);
+        throw new Error(
+          `Service '${DEFAULT_PLANNING_SCENE_SERVICE}' returned null or undefined response`,
+        );
       }
 
-      if (typeof response !== 'object') {
-        throw new Error(`Service '${DEFAULT_PLANNING_SCENE_SERVICE}' returned invalid response type: ${typeof response} (expected object)`);
+      if (typeof response !== "object") {
+        throw new Error(
+          `Service '${DEFAULT_PLANNING_SCENE_SERVICE}' returned invalid response type: ${typeof response} (expected object)`,
+        );
       }
 
-      if (!Object.prototype.hasOwnProperty.call(response, 'scene')) {
-        throw new Error(`Service '${DEFAULT_PLANNING_SCENE_SERVICE}' response missing required 'scene' field. Available fields: ${Object.keys(response).join(', ')}`);
+      if (!Object.prototype.hasOwnProperty.call(response, "scene")) {
+        throw new Error(
+          `Service '${DEFAULT_PLANNING_SCENE_SERVICE}' response missing required 'scene' field. Available fields: ${Object.keys(response).join(", ")}`,
+        );
       }
 
       const scene = response.scene as PartialMessage<PlanningScene> | undefined;
 
       if (scene == undefined) {
-        throw new Error(`Service '${DEFAULT_PLANNING_SCENE_SERVICE}' returned null or undefined scene data`);
+        throw new Error(
+          `Service '${DEFAULT_PLANNING_SCENE_SERVICE}' returned null or undefined scene data`,
+        );
       }
 
       // Validate the scene structure
@@ -1061,17 +1121,16 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Clear any service errors on success
       this.renderer.settings.errors.remove(
         ["extensions", PlanningSceneExtension.extensionId, "service"],
-        SERVICE_ERROR
+        SERVICE_ERROR,
       );
-
     } catch (error) {
       let errorMessage: string;
 
       if (error instanceof Error) {
         // Check for specific error types and provide helpful guidance
-        if (error.message.includes('Service client')) {
+        if (error.message.includes("Service client")) {
           errorMessage = `Service client error: ${error.message}`;
-        } else if (error.message.includes('not found') || error.message.includes('unavailable')) {
+        } else if (error.message.includes("not found") || error.message.includes("unavailable")) {
           errorMessage = `Service unavailable: The '${DEFAULT_PLANNING_SCENE_SERVICE}' service is not available. Make sure MoveIt is running and the planning scene service is advertised.`;
         } else {
           errorMessage = `Failed to fetch initial planning scene from '${DEFAULT_PLANNING_SCENE_SERVICE}': ${error.message}`;
@@ -1086,7 +1145,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.renderer.settings.errors.add(
         ["extensions", PlanningSceneExtension.extensionId, "service"],
         SERVICE_ERROR,
-        errorMessage
+        errorMessage,
       );
 
       // Don't mark as fetched so we can retry later
@@ -1104,7 +1163,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   private applyDifferentialUpdate(scene: PartialMessage<PlanningScene>): void {
     if (!this.currentScene) {
       // If we don't have a base scene, try to fetch it first
-      log.warn("Received differential update without base scene, attempting to fetch initial scene");
+      log.warn(
+        "Received differential update without base scene, attempting to fetch initial scene",
+      );
 
       if (!this.fetchingInitialScene && !this.initialSceneFetched) {
         void this.fetchInitialScene();
@@ -1131,7 +1192,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Handle color-only updates: if object_colors changed, update existing objects that aren't in collision_objects
     if (scene.object_colors && scene.object_colors.length > 0) {
       const processedObjectIds = new Set(
-        scene.world?.collision_objects?.map(obj => obj?.id).filter(Boolean) ?? []
+        scene.world?.collision_objects?.map((obj) => obj?.id).filter(Boolean) ?? [],
       );
 
       for (const objectColor of scene.object_colors) {
@@ -1147,7 +1208,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
             const sceneColor = this.getObjectColorFromScene(objectColor.id);
             if (sceneColor) {
               existingRenderable.userData.settings.color = sceneColor.color;
-              existingRenderable.userData.settings.opacity = this.settings.sceneOpacity * sceneColor.opacity;
+              existingRenderable.userData.settings.opacity =
+                this.settings.sceneOpacity * sceneColor.opacity;
               existingRenderable.update(existingRenderable.userData.collisionObject);
             }
           }
@@ -1162,7 +1224,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Process robot state including attached collision objects
-  private processRobotState(robotState: PartialMessage<RobotState>, scene?: PartialMessage<PlanningScene>): void {
+  private processRobotState(
+    robotState: PartialMessage<RobotState>,
+    scene?: PartialMessage<PlanningScene>,
+  ): void {
     // Process attached collision objects
     if (robotState.attached_collision_objects) {
       for (const attachedObject of robotState.attached_collision_objects) {
@@ -1174,7 +1239,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Process an attached collision object
-  private processAttachedCollisionObject(attachedObject: PartialMessage<AttachedCollisionObject>, scene?: PartialMessage<PlanningScene>): void {
+  private processAttachedCollisionObject(
+    attachedObject: PartialMessage<AttachedCollisionObject>,
+    scene?: PartialMessage<PlanningScene>,
+  ): void {
     const object = attachedObject.object!;
     const linkName = attachedObject.link_name!;
     const objectId = object.id!;
@@ -1233,7 +1301,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Merge differential scene data into existing scene
   private mergeSceneData(
     baseScene: PartialMessage<PlanningScene>,
-    diffScene: PartialMessage<PlanningScene>
+    diffScene: PartialMessage<PlanningScene>,
   ): PartialMessage<PlanningScene> {
     // Create a deep copy of the base scene
     const mergedScene: PartialMessage<PlanningScene> = {
@@ -1271,7 +1339,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const diffColors = diffScene.object_colors ?? [];
 
       // Create a map of existing colors by object ID for efficient lookup
-      const colorMap = new Map<string, typeof baseColors[0]>();
+      const colorMap = new Map<string, (typeof baseColors)[0]>();
 
       // Add base colors to the map
       for (const colorEntry of baseColors) {
@@ -1295,7 +1363,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Validate planning scene message structure
-  private validatePlanningSceneMessage(scene: PartialMessage<PlanningScene>, topic: string): boolean {
+  private validatePlanningSceneMessage(
+    scene: PartialMessage<PlanningScene>,
+    topic: string,
+  ): boolean {
     try {
       // Since scene is a PartialMessage, it should always be defined, but we can check for empty object
       if (Object.keys(scene).length === 0) {
@@ -1305,27 +1376,39 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Check for required fields based on message type
       if (scene.is_diff === true) {
         // For differential updates, we need at least some content to apply
-        const hasCollisionObjects = scene.world?.collision_objects != undefined && scene.world.collision_objects.length > 0;
+        const hasCollisionObjects =
+          scene.world?.collision_objects != undefined && scene.world.collision_objects.length > 0;
         const hasRobotState = scene.robot_state != undefined;
-        const hasTransforms = scene.fixed_frame_transforms != undefined && scene.fixed_frame_transforms.length > 0;
+        const hasTransforms =
+          scene.fixed_frame_transforms != undefined && scene.fixed_frame_transforms.length > 0;
 
         if (!hasCollisionObjects && !hasRobotState && !hasTransforms) {
-          throw new Error(`Received differential planning scene message with no content from topic "${topic}"`);
+          throw new Error(
+            `Received differential planning scene message with no content from topic "${topic}"`,
+          );
         }
 
         // Validate collision objects in differential updates
         if (hasCollisionObjects) {
-          this.validateCollisionObjects(scene.world!.collision_objects as (PartialMessage<CollisionObject> | undefined)[], topic);
+          this.validateCollisionObjects(
+            scene.world!.collision_objects as (PartialMessage<CollisionObject> | undefined)[],
+            topic,
+          );
         }
       } else {
         // For full scene updates, we expect a world object (even if empty)
         if (scene.world == undefined) {
-          throw new Error(`Received full planning scene message without world data from topic "${topic}"`);
+          throw new Error(
+            `Received full planning scene message without world data from topic "${topic}"`,
+          );
         }
 
         // Validate collision objects in full scene updates
         if (scene.world.collision_objects && scene.world.collision_objects.length > 0) {
-          this.validateCollisionObjects(scene.world.collision_objects as (PartialMessage<CollisionObject> | undefined)[], topic);
+          this.validateCollisionObjects(
+            scene.world.collision_objects as (PartialMessage<CollisionObject> | undefined)[],
+            topic,
+          );
         }
       }
 
@@ -1338,7 +1421,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.renderer.settings.errors.add(
         ["extensions", PlanningSceneExtension.extensionId, "messageProcessing"],
         MESSAGE_PROCESSING_ERROR,
-        errorMessage
+        errorMessage,
       );
 
       return false;
@@ -1346,29 +1429,39 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Validate collision objects structure
-  private validateCollisionObjects(collisionObjects: (PartialMessage<CollisionObject> | undefined)[], _topic: string): void {
+  private validateCollisionObjects(
+    collisionObjects: (PartialMessage<CollisionObject> | undefined)[],
+    _topic: string,
+  ): void {
     for (let i = 0; i < collisionObjects.length; i++) {
       const obj = collisionObjects[i];
       if (obj == undefined) {
         throw new Error(`Collision object at index ${i} is null or undefined`);
       }
 
-      if (obj.id == undefined || typeof obj.id !== 'string') {
+      if (obj.id == undefined || typeof obj.id !== "string") {
         throw new Error(`Collision object at index ${i} has invalid or missing 'id' field`);
       }
 
-      if (obj.operation == undefined || typeof obj.operation !== 'number') {
+      if (obj.operation == undefined || typeof obj.operation !== "number") {
         throw new Error(`Collision object '${obj.id}' has invalid or missing 'operation' field`);
       }
 
       // Validate operation-specific requirements
-      if (obj.operation === CollisionObjectOperation.ADD || obj.operation === CollisionObjectOperation.MOVE) {
+      if (
+        obj.operation === CollisionObjectOperation.ADD ||
+        obj.operation === CollisionObjectOperation.MOVE
+      ) {
         if (obj.header?.frame_id == undefined) {
-          throw new Error(`Collision object '${obj.id}' with ${CollisionObjectOperation[obj.operation]} operation requires header.frame_id`);
+          throw new Error(
+            `Collision object '${obj.id}' with ${CollisionObjectOperation[obj.operation]} operation requires header.frame_id`,
+          );
         }
 
         if (obj.pose == undefined) {
-          throw new Error(`Collision object '${obj.id}' with ${CollisionObjectOperation[obj.operation]} operation requires pose`);
+          throw new Error(
+            `Collision object '${obj.id}' with ${CollisionObjectOperation[obj.operation]} operation requires pose`,
+          );
         }
       }
 
@@ -1384,37 +1477,52 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Validate primitive shapes
-  private validatePrimitives(primitives: (PartialMessage<SolidPrimitive> | undefined)[], objectId: string): void {
+  private validatePrimitives(
+    primitives: (PartialMessage<SolidPrimitive> | undefined)[],
+    objectId: string,
+  ): void {
     for (let i = 0; i < primitives.length; i++) {
       const primitive = primitives[i];
       if (primitive == undefined) {
-        throw new Error(`Primitive at index ${i} in collision object '${objectId}' is null or undefined`);
+        throw new Error(
+          `Primitive at index ${i} in collision object '${objectId}' is null or undefined`,
+        );
       }
 
-      if (primitive.type == undefined || typeof primitive.type !== 'number') {
-        throw new Error(`Primitive at index ${i} in collision object '${objectId}' has invalid or missing 'type' field`);
+      if (primitive.type == undefined || typeof primitive.type !== "number") {
+        throw new Error(
+          `Primitive at index ${i} in collision object '${objectId}' has invalid or missing 'type' field`,
+        );
       }
 
       if (primitive.dimensions == undefined || !Array.isArray(primitive.dimensions)) {
-        throw new Error(`Primitive at index ${i} in collision object '${objectId}' has invalid or missing 'dimensions' field`);
+        throw new Error(
+          `Primitive at index ${i} in collision object '${objectId}' has invalid or missing 'dimensions' field`,
+        );
       }
 
       // Validate dimensions based on primitive type
       switch (primitive.type) {
         case SolidPrimitiveType.BOX:
           if (primitive.dimensions.length < 3) {
-            throw new Error(`Box primitive at index ${i} in collision object '${objectId}' requires 3 dimensions [x, y, z]`);
+            throw new Error(
+              `Box primitive at index ${i} in collision object '${objectId}' requires 3 dimensions [x, y, z]`,
+            );
           }
           break;
         case SolidPrimitiveType.SPHERE:
           if (primitive.dimensions.length < 1) {
-            throw new Error(`Sphere primitive at index ${i} in collision object '${objectId}' requires 1 dimension [radius]`);
+            throw new Error(
+              `Sphere primitive at index ${i} in collision object '${objectId}' requires 1 dimension [radius]`,
+            );
           }
           break;
         case SolidPrimitiveType.CYLINDER:
         case SolidPrimitiveType.CONE:
           if (primitive.dimensions.length < 2) {
-            throw new Error(`${primitive.type === SolidPrimitiveType.CYLINDER ? 'Cylinder' : 'Cone'} primitive at index ${i} in collision object '${objectId}' requires 2 dimensions [height, radius]`);
+            throw new Error(
+              `${primitive.type === SolidPrimitiveType.CYLINDER ? "Cylinder" : "Cone"} primitive at index ${i} in collision object '${objectId}' requires 2 dimensions [height, radius]`,
+            );
           }
           break;
       }
@@ -1422,8 +1530,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Validate dimension values are positive
       for (let j = 0; j < primitive.dimensions.length; j++) {
         const dim = primitive.dimensions[j];
-        if (typeof dim !== 'number' || dim <= 0) {
-          throw new Error(`Primitive at index ${i} in collision object '${objectId}' has invalid dimension at index ${j}: ${dim} (must be positive number)`);
+        if (typeof dim !== "number" || dim <= 0) {
+          throw new Error(
+            `Primitive at index ${i} in collision object '${objectId}' has invalid dimension at index ${j}: ${dim} (must be positive number)`,
+          );
         }
       }
     }
@@ -1434,15 +1544,21 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     for (let i = 0; i < meshes.length; i++) {
       const mesh = meshes[i];
       if (mesh == undefined) {
-        throw new Error(`Mesh at index ${i} in collision object '${objectId}' is null or undefined`);
+        throw new Error(
+          `Mesh at index ${i} in collision object '${objectId}' is null or undefined`,
+        );
       }
 
       if (mesh.vertices == undefined || !Array.isArray(mesh.vertices)) {
-        throw new Error(`Mesh at index ${i} in collision object '${objectId}' has invalid or missing 'vertices' field`);
+        throw new Error(
+          `Mesh at index ${i} in collision object '${objectId}' has invalid or missing 'vertices' field`,
+        );
       }
 
       if (mesh.triangles == undefined || !Array.isArray(mesh.triangles)) {
-        throw new Error(`Mesh at index ${i} in collision object '${objectId}' has invalid or missing 'triangles' field`);
+        throw new Error(
+          `Mesh at index ${i} in collision object '${objectId}' has invalid or missing 'triangles' field`,
+        );
       }
 
       if (mesh.vertices.length === 0) {
@@ -1457,13 +1573,21 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       for (let j = 0; j < mesh.triangles.length; j++) {
         const triangle = mesh.triangles[j];
         if (triangle?.vertex_indices == undefined || triangle.vertex_indices.length !== 3) {
-          throw new Error(`Triangle at index ${j} in mesh ${i} of collision object '${objectId}' has invalid vertex_indices (must be array of 3 indices)`);
+          throw new Error(
+            `Triangle at index ${j} in mesh ${i} of collision object '${objectId}' has invalid vertex_indices (must be array of 3 indices)`,
+          );
         }
 
         for (let k = 0; k < 3; k++) {
           const vertexIndex = triangle.vertex_indices[k];
-          if (typeof vertexIndex !== 'number' || vertexIndex < 0 || vertexIndex >= mesh.vertices.length) {
-            throw new Error(`Triangle at index ${j} in mesh ${i} of collision object '${objectId}' has invalid vertex index ${vertexIndex} (must be 0-${mesh.vertices.length - 1})`);
+          if (
+            typeof vertexIndex !== "number" ||
+            vertexIndex < 0 ||
+            vertexIndex >= mesh.vertices.length
+          ) {
+            throw new Error(
+              `Triangle at index ${j} in mesh ${i} of collision object '${objectId}' has invalid vertex index ${vertexIndex} (must be 0-${mesh.vertices.length - 1})`,
+            );
           }
         }
       }
@@ -1481,7 +1605,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.renderer.settings.errors.add(
         ["extensions", PlanningSceneExtension.extensionId, "messageProcessing"],
         MESSAGE_PROCESSING_ERROR,
-        errorMessage
+        errorMessage,
       );
       return;
     }
@@ -1494,7 +1618,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.renderer.settings.errors.add(
         ["extensions", PlanningSceneExtension.extensionId, "collisionObjects", object.id],
         MESSAGE_PROCESSING_ERROR,
-        errorMessage
+        errorMessage,
       );
       return;
     }
@@ -1503,7 +1627,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const operation = object.operation;
 
     // Differential update - only process changed objects for performance optimization
-    if (operation === CollisionObjectOperation.ADD || operation === CollisionObjectOperation.APPEND || operation === CollisionObjectOperation.MOVE) {
+    if (
+      operation === CollisionObjectOperation.ADD ||
+      operation === CollisionObjectOperation.APPEND ||
+      operation === CollisionObjectOperation.MOVE
+    ) {
       const fullObject = object as CollisionObject;
       if (!this.hasObjectChanged(fullObject)) {
         // Object hasn't changed, skip processing
@@ -1515,7 +1643,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Clear any previous errors for this collision object
       this.renderer.settings.errors.remove(
         ["extensions", PlanningSceneExtension.extensionId, "collisionObjects", objectId],
-        MESSAGE_PROCESSING_ERROR
+        MESSAGE_PROCESSING_ERROR,
       );
 
       switch (operation) {
@@ -1536,14 +1664,14 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           break;
         }
         default: {
-          const errorMessage = `Unknown collision object operation: ${operation} (${CollisionObjectOperation[operation] ?? 'UNKNOWN'}) for object '${objectId}'. Valid operations are: ADD (${CollisionObjectOperation.ADD}), REMOVE (${CollisionObjectOperation.REMOVE}), APPEND (${CollisionObjectOperation.APPEND}), MOVE (${CollisionObjectOperation.MOVE})`;
+          const errorMessage = `Unknown collision object operation: ${operation} (${CollisionObjectOperation[operation] ?? "UNKNOWN"}) for object '${objectId}'. Valid operations are: ADD (${CollisionObjectOperation.ADD}), REMOVE (${CollisionObjectOperation.REMOVE}), APPEND (${CollisionObjectOperation.APPEND}), MOVE (${CollisionObjectOperation.MOVE})`;
           log.warn(errorMessage);
 
           // Report error to settings tree
           this.renderer.settings.errors.add(
             ["extensions", PlanningSceneExtension.extensionId, "collisionObjects", objectId],
             MESSAGE_PROCESSING_ERROR,
-            errorMessage
+            errorMessage,
           );
           break;
         }
@@ -1557,7 +1685,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.renderer.settings.errors.add(
         ["extensions", PlanningSceneExtension.extensionId, "collisionObjects", objectId],
         MESSAGE_PROCESSING_ERROR,
-        errorMessage
+        errorMessage,
       );
     }
   }
@@ -1568,31 +1696,41 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     // Validate required fields for ADD operation
     if (object.header?.frame_id == undefined) {
-      throw new Error(`ADD operation for object '${objectId}' requires header.frame_id to specify the coordinate frame`);
+      throw new Error(
+        `ADD operation for object '${objectId}' requires header.frame_id to specify the coordinate frame`,
+      );
     }
 
     if (object.pose == undefined) {
-      throw new Error(`ADD operation for object '${objectId}' requires pose to specify position and orientation`);
+      throw new Error(
+        `ADD operation for object '${objectId}' requires pose to specify position and orientation`,
+      );
     }
 
     try {
       // Validate pose values
       const pose = object.pose;
-      if (pose.position && (
-        (pose.position.x != undefined && !isFinite(pose.position.x)) ||
-        (pose.position.y != undefined && !isFinite(pose.position.y)) ||
-        (pose.position.z != undefined && !isFinite(pose.position.z))
-      )) {
-        throw new Error(`ADD operation for object '${objectId}' has invalid position values: [${pose.position.x ?? 'undefined'}, ${pose.position.y ?? 'undefined'}, ${pose.position.z ?? 'undefined'}]`);
+      if (
+        pose.position &&
+        ((pose.position.x != undefined && !isFinite(pose.position.x)) ||
+          (pose.position.y != undefined && !isFinite(pose.position.y)) ||
+          (pose.position.z != undefined && !isFinite(pose.position.z)))
+      ) {
+        throw new Error(
+          `ADD operation for object '${objectId}' has invalid position values: [${pose.position.x ?? "undefined"}, ${pose.position.y ?? "undefined"}, ${pose.position.z ?? "undefined"}]`,
+        );
       }
 
-      if (pose.orientation && (
-        (pose.orientation.x != undefined && !isFinite(pose.orientation.x)) ||
-        (pose.orientation.y != undefined && !isFinite(pose.orientation.y)) ||
-        (pose.orientation.z != undefined && !isFinite(pose.orientation.z)) ||
-        (pose.orientation.w != undefined && !isFinite(pose.orientation.w))
-      )) {
-        throw new Error(`ADD operation for object '${objectId}' has invalid orientation values: [${pose.orientation.x ?? 'undefined'}, ${pose.orientation.y ?? 'undefined'}, ${pose.orientation.z ?? 'undefined'}, ${pose.orientation.w ?? 'undefined'}]`);
+      if (
+        pose.orientation &&
+        ((pose.orientation.x != undefined && !isFinite(pose.orientation.x)) ||
+          (pose.orientation.y != undefined && !isFinite(pose.orientation.y)) ||
+          (pose.orientation.z != undefined && !isFinite(pose.orientation.z)) ||
+          (pose.orientation.w != undefined && !isFinite(pose.orientation.w)))
+      ) {
+        throw new Error(
+          `ADD operation for object '${objectId}' has invalid orientation values: [${pose.orientation.x ?? "undefined"}, ${pose.orientation.y ?? "undefined"}, ${pose.orientation.z ?? "undefined"}, ${pose.orientation.w ?? "undefined"}]`,
+        );
       }
 
       // Cast to full type after validation
@@ -1616,7 +1754,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
       // Get saved settings for this collision object from configuration
       const instanceId = this.findInstanceIdForCollisionObject(objectId) ?? this.currentInstanceId;
-      const layerConfig = instanceId ? this.renderer.config.layers[instanceId] as Partial<LayerSettingsPlanningScene> | undefined : undefined;
+      const layerConfig = instanceId
+        ? (this.renderer.config.layers[instanceId] as
+            | Partial<LayerSettingsPlanningScene>
+            | undefined)
+        : undefined;
       const savedObjectSettings = layerConfig?.collisionObjects?.[objectId];
 
       // Apply scene opacity multiplicatively: sceneOpacity * messageOpacity (or 1.0 if no message opacity)
@@ -1663,9 +1805,13 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.add(renderable);
       this.renderables.set(objectId, renderable);
 
-      log.info(`Added collision object '${objectId}' in frame '${fullObject.header.frame_id}' with ${totalShapes} shapes (${primitiveCount} primitives, ${meshCount} meshes, ${planeCount} planes)`);
+      log.info(
+        `Added collision object '${objectId}' in frame '${fullObject.header.frame_id}' with ${totalShapes} shapes (${primitiveCount} primitives, ${meshCount} meshes, ${planeCount} planes)`,
+      );
     } catch (error) {
-      throw new Error(`ADD operation for object '${objectId}' failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `ADD operation for object '${objectId}' failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -1674,7 +1820,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const renderable = this.renderables.get(objectId);
     if (!renderable) {
       // Not an error - object might not exist or already removed
-      log.info(`Collision object '${objectId}' not found for REMOVE operation (may already be removed)`);
+      log.info(
+        `Collision object '${objectId}' not found for REMOVE operation (may already be removed)`,
+      );
       return;
     }
 
@@ -1687,9 +1835,12 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     this.objectHashes.delete(objectId);
 
     // Clear any errors for this object
-    this.renderer.settings.errors.clearPath(
-      ["extensions", PlanningSceneExtension.extensionId, "collisionObjects", objectId]
-    );
+    this.renderer.settings.errors.clearPath([
+      "extensions",
+      PlanningSceneExtension.extensionId,
+      "collisionObjects",
+      objectId,
+    ]);
 
     log.info(`Removed collision object '${objectId}'`);
   }
@@ -1700,7 +1851,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const renderable = this.renderables.get(objectId);
 
     if (renderable == undefined) {
-      throw new Error(`Cannot MOVE collision object '${objectId}': object not found. Make sure the object was previously added with an ADD operation.`);
+      throw new Error(
+        `Cannot MOVE collision object '${objectId}': object not found. Make sure the object was previously added with an ADD operation.`,
+      );
     }
 
     // Validate that geometry arrays are empty for MOVE operation
@@ -1710,36 +1863,48 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const hasGeometry = primitiveCount > 0 || meshCount > 0 || planeCount > 0;
 
     if (hasGeometry) {
-      throw new Error(`MOVE operation for object '${objectId}' must have empty geometry arrays. Found ${primitiveCount} primitives, ${meshCount} meshes, ${planeCount} planes. Use APPEND operation to add geometry or ADD operation to replace the entire object.`);
+      throw new Error(
+        `MOVE operation for object '${objectId}' must have empty geometry arrays. Found ${primitiveCount} primitives, ${meshCount} meshes, ${planeCount} planes. Use APPEND operation to add geometry or ADD operation to replace the entire object.`,
+      );
     }
 
     // Validate required fields for MOVE operation
     if (object.header?.frame_id == undefined) {
-      throw new Error(`MOVE operation for object '${objectId}' requires header.frame_id to specify the target coordinate frame`);
+      throw new Error(
+        `MOVE operation for object '${objectId}' requires header.frame_id to specify the target coordinate frame`,
+      );
     }
 
     if (object.pose == undefined) {
-      throw new Error(`MOVE operation for object '${objectId}' requires pose to specify the new position and orientation`);
+      throw new Error(
+        `MOVE operation for object '${objectId}' requires pose to specify the new position and orientation`,
+      );
     }
 
     try {
       // Validate pose values
       const pose = object.pose;
-      if (pose.position && (
-        (pose.position.x != undefined && !isFinite(pose.position.x)) ||
-        (pose.position.y != undefined && !isFinite(pose.position.y)) ||
-        (pose.position.z != undefined && !isFinite(pose.position.z))
-      )) {
-        throw new Error(`MOVE operation for object '${objectId}' has invalid position values: [${pose.position.x ?? 'undefined'}, ${pose.position.y ?? 'undefined'}, ${pose.position.z ?? 'undefined'}]`);
+      if (
+        pose.position &&
+        ((pose.position.x != undefined && !isFinite(pose.position.x)) ||
+          (pose.position.y != undefined && !isFinite(pose.position.y)) ||
+          (pose.position.z != undefined && !isFinite(pose.position.z)))
+      ) {
+        throw new Error(
+          `MOVE operation for object '${objectId}' has invalid position values: [${pose.position.x ?? "undefined"}, ${pose.position.y ?? "undefined"}, ${pose.position.z ?? "undefined"}]`,
+        );
       }
 
-      if (pose.orientation && (
-        (pose.orientation.x != undefined && !isFinite(pose.orientation.x)) ||
-        (pose.orientation.y != undefined && !isFinite(pose.orientation.y)) ||
-        (pose.orientation.z != undefined && !isFinite(pose.orientation.z)) ||
-        (pose.orientation.w != undefined && !isFinite(pose.orientation.w))
-      )) {
-        throw new Error(`MOVE operation for object '${objectId}' has invalid orientation values: [${pose.orientation.x ?? 'undefined'}, ${pose.orientation.y ?? 'undefined'}, ${pose.orientation.z ?? 'undefined'}, ${pose.orientation.w ?? 'undefined'}]`);
+      if (
+        pose.orientation &&
+        ((pose.orientation.x != undefined && !isFinite(pose.orientation.x)) ||
+          (pose.orientation.y != undefined && !isFinite(pose.orientation.y)) ||
+          (pose.orientation.z != undefined && !isFinite(pose.orientation.z)) ||
+          (pose.orientation.w != undefined && !isFinite(pose.orientation.w)))
+      ) {
+        throw new Error(
+          `MOVE operation for object '${objectId}' has invalid orientation values: [${pose.orientation.x ?? "undefined"}, ${pose.orientation.y ?? "undefined"}, ${pose.orientation.z ?? "undefined"}, ${pose.orientation.w ?? "undefined"}]`,
+        );
       }
 
       // Update the pose and frame information without changing geometry
@@ -1762,9 +1927,13 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         renderable.update(renderable.userData.collisionObject);
       }
 
-      log.info(`Moved collision object '${objectId}' to new pose in frame '${object.header.frame_id}'`);
+      log.info(
+        `Moved collision object '${objectId}' to new pose in frame '${object.header.frame_id}'`,
+      );
     } catch (error) {
-      throw new Error(`MOVE operation for object '${objectId}' failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `MOVE operation for object '${objectId}' failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -1774,7 +1943,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const renderable = this.renderables.get(objectId);
 
     if (renderable == undefined) {
-      throw new Error(`Cannot APPEND to collision object '${objectId}': object not found. Make sure the object was previously added with an ADD operation.`);
+      throw new Error(
+        `Cannot APPEND to collision object '${objectId}': object not found. Make sure the object was previously added with an ADD operation.`,
+      );
     }
 
     // Get the existing collision object data
@@ -1790,37 +1961,69 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     const totalNewShapes = newPrimitives.length + newMeshes.length + newPlanes.length;
     if (totalNewShapes === 0) {
-      throw new Error(`APPEND operation for object '${objectId}' has no geometry to append. Provide at least one primitive, mesh, or plane.`);
+      throw new Error(
+        `APPEND operation for object '${objectId}' has no geometry to append. Provide at least one primitive, mesh, or plane.`,
+      );
     }
 
     // Validate pose arrays match geometry arrays
-    if (newPrimitives.length > 0 && newPrimitivePoses.length > 0 && newPrimitives.length !== newPrimitivePoses.length) {
-      throw new Error(`APPEND operation for object '${objectId}': primitive count (${newPrimitives.length}) does not match primitive pose count (${newPrimitivePoses.length})`);
+    if (
+      newPrimitives.length > 0 &&
+      newPrimitivePoses.length > 0 &&
+      newPrimitives.length !== newPrimitivePoses.length
+    ) {
+      throw new Error(
+        `APPEND operation for object '${objectId}': primitive count (${newPrimitives.length}) does not match primitive pose count (${newPrimitivePoses.length})`,
+      );
     }
 
-    if (newMeshes.length > 0 && newMeshPoses.length > 0 && newMeshes.length !== newMeshPoses.length) {
-      throw new Error(`APPEND operation for object '${objectId}': mesh count (${newMeshes.length}) does not match mesh pose count (${newMeshPoses.length})`);
+    if (
+      newMeshes.length > 0 &&
+      newMeshPoses.length > 0 &&
+      newMeshes.length !== newMeshPoses.length
+    ) {
+      throw new Error(
+        `APPEND operation for object '${objectId}': mesh count (${newMeshes.length}) does not match mesh pose count (${newMeshPoses.length})`,
+      );
     }
 
-    if (newPlanes.length > 0 && newPlanePoses.length > 0 && newPlanes.length !== newPlanePoses.length) {
-      throw new Error(`APPEND operation for object '${objectId}': plane count (${newPlanes.length}) does not match plane pose count (${newPlanePoses.length})`);
+    if (
+      newPlanes.length > 0 &&
+      newPlanePoses.length > 0 &&
+      newPlanes.length !== newPlanePoses.length
+    ) {
+      throw new Error(
+        `APPEND operation for object '${objectId}': plane count (${newPlanes.length}) does not match plane pose count (${newPlanePoses.length})`,
+      );
     }
 
     try {
       const mergedObject: CollisionObject = {
         ...existingObject,
         // Append new primitives
-        primitives: [...existingObject.primitives, ...newPrimitives] as CollisionObject['primitives'],
-        primitive_poses: [...existingObject.primitive_poses, ...newPrimitivePoses] as CollisionObject['primitive_poses'],
+        primitives: [
+          ...existingObject.primitives,
+          ...newPrimitives,
+        ] as CollisionObject["primitives"],
+        primitive_poses: [
+          ...existingObject.primitive_poses,
+          ...newPrimitivePoses,
+        ] as CollisionObject["primitive_poses"],
         // Append new meshes
-        meshes: [...existingObject.meshes, ...newMeshes] as CollisionObject['meshes'],
-        mesh_poses: [...existingObject.mesh_poses, ...newMeshPoses] as CollisionObject['mesh_poses'],
+        meshes: [...existingObject.meshes, ...newMeshes] as CollisionObject["meshes"],
+        mesh_poses: [
+          ...existingObject.mesh_poses,
+          ...newMeshPoses,
+        ] as CollisionObject["mesh_poses"],
         // Append new planes
-        planes: [...existingObject.planes, ...newPlanes] as CollisionObject['planes'],
-        plane_poses: [...existingObject.plane_poses, ...newPlanePoses] as CollisionObject['plane_poses'],
+        planes: [...existingObject.planes, ...newPlanes] as CollisionObject["planes"],
+        plane_poses: [
+          ...existingObject.plane_poses,
+          ...newPlanePoses,
+        ] as CollisionObject["plane_poses"],
         // Update header and pose if provided
         header: object.header ? this.ensureFullHeader(object.header) : existingObject.header,
-        pose: object.pose ? this.ensureFullPose(object.pose) : existingObject.pose
+        pose: object.pose ? this.ensureFullPose(object.pose) : existingObject.pose,
       };
 
       // Update color and opacity from planning scene if available (colors may have changed)
@@ -1838,11 +2041,18 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const addedPrimitives = newPrimitives.length;
       const addedMeshes = newMeshes.length;
       const addedPlanes = newPlanes.length;
-      const totalExisting = existingObject.primitives.length + existingObject.meshes.length + existingObject.planes.length;
+      const totalExisting =
+        existingObject.primitives.length +
+        existingObject.meshes.length +
+        existingObject.planes.length;
 
-      log.info(`Appended to collision object '${objectId}': ${addedPrimitives} primitives, ${addedMeshes} meshes, ${addedPlanes} planes (total shapes: ${totalExisting + totalNewShapes})`);
+      log.info(
+        `Appended to collision object '${objectId}': ${addedPrimitives} primitives, ${addedMeshes} meshes, ${addedPlanes} planes (total shapes: ${totalExisting + totalNewShapes})`,
+      );
     } catch (error) {
-      throw new Error(`APPEND operation for object '${objectId}' failed: ${error instanceof Error ? error.message : String(error)}`);
+      throw new Error(
+        `APPEND operation for object '${objectId}' failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -1857,9 +2067,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     this.objectHashes.clear();
 
     // Clear all collision object errors
-    this.renderer.settings.errors.clearPath(
-      ["extensions", PlanningSceneExtension.extensionId, "collisionObjects"]
-    );
+    this.renderer.settings.errors.clearPath([
+      "extensions",
+      PlanningSceneExtension.extensionId,
+      "collisionObjects",
+    ]);
   }
 
   // Public method to manually retry fetching initial scene
@@ -1873,8 +2085,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   public hasInitialScene(): boolean {
     return this.initialSceneFetched && this.currentScene != undefined;
   }
-
-
 
   // Get performance statistics for monitoring optimization effectiveness
   public getPerformanceStats(): {
@@ -1898,7 +2108,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Helper function to ensure a partial pose becomes a full pose
-  private ensureFullPose(partialPose: PartialMessage<CollisionObject>['pose']): Pose {
+  private ensureFullPose(partialPose: PartialMessage<CollisionObject>["pose"]): Pose {
     if (!partialPose) {
       throw new Error(t("threeDee:poseRequired"));
     }
@@ -1919,7 +2129,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Helper function to ensure a partial header becomes a full header
-  private ensureFullHeader(partialHeader: PartialMessage<CollisionObject>['header']): Header {
+  private ensureFullHeader(partialHeader: PartialMessage<CollisionObject>["header"]): Header {
     if (!partialHeader) {
       throw new Error(t("threeDee:headerRequired"));
     }
@@ -1934,14 +2144,18 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     };
   }
 
-  #updatePlanningSceneLayer(instanceId: string, settings: Partial<LayerSettingsPlanningScene> | undefined): void {
+  #updatePlanningSceneLayer(
+    instanceId: string,
+    settings: Partial<LayerSettingsPlanningScene> | undefined,
+  ): void {
     // Handle deletes
     if (settings == undefined) {
       // Remove all renderables associated with this layer instance
       // Since planning scene extension shares renderables across all instances,
       // we need to check if this is the last instance before removing renderables
-      const remainingInstances = Object.entries(this.renderer.config.layers)
-        .filter(([id, config]) => id !== instanceId && config?.layerId === LAYER_ID);
+      const remainingInstances = Object.entries(this.renderer.config.layers).filter(
+        ([id, config]) => id !== instanceId && config?.layerId === LAYER_ID,
+      );
 
       if (remainingInstances.length === 0) {
         // This was the last planning scene layer, remove all renderables
@@ -1978,7 +2192,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       }
 
       // Get the layer config
-      const layerConfig = this.renderer.config.layers[instanceId] as Partial<LayerSettingsPlanningScene> | undefined;
+      const layerConfig = this.renderer.config.layers[instanceId] as
+        | Partial<LayerSettingsPlanningScene>
+        | undefined;
       const savedObjectSettings = layerConfig?.collisionObjects?.[objectId];
 
       if (savedObjectSettings) {
@@ -2013,7 +2229,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
   // Helper method to find the first planning scene instance ID
   private findFirstPlanningSceneInstanceId(): string | undefined {
-
     for (const [instanceId, layerConfig] of Object.entries(this.renderer.config.layers)) {
       if (layerConfig?.layerId === LAYER_ID) {
         return instanceId;
@@ -2121,7 +2336,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         // Refetch the planning scene
         this.retryFetchInitialScene();
       }
-    } else if (action.action === "perform-node-action" && path.length === 3 && path[2] === "collisionObjects") {
+    } else if (
+      action.action === "perform-node-action" &&
+      path.length === 3 &&
+      path[2] === "collisionObjects"
+    ) {
       // Handle collision objects show-all/hide-all actions
       const instanceId = path[1]!;
       if (action.payload.id === "show-all") {
@@ -2134,7 +2353,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     } else if (action.action === "perform-node-action") {
       // Handle service retry action for custom layers
       const { id } = action.payload;
-      if (path.length === 3 && path[2] === "service" && (id === "retryService" || id === "refetchService")) {
+      if (
+        path.length === 3 &&
+        path[2] === "service" &&
+        (id === "retryService" || id === "refetchService")
+      ) {
         this.retryFetchInitialScene();
       }
     } else {
@@ -2206,7 +2429,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
         // Apply scene opacity multiplicatively
         renderable.userData.settings.opacity = newSceneOpacity * messageOpacity;
-        log.info(`Message opacity: ${messageOpacity}, New scene opacity: ${newSceneOpacity}, Renderable opacity: ${renderable.userData.settings.opacity}`);
+        log.info(
+          `Message opacity: ${messageOpacity}, New scene opacity: ${newSceneOpacity}, Renderable opacity: ${renderable.userData.settings.opacity}`,
+        );
 
         // Trigger visual update to apply new opacity
         renderable.update(renderable.userData.collisionObject);

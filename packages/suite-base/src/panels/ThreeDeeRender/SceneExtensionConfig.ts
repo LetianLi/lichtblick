@@ -5,7 +5,7 @@
 // License, v2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/
 
-import { BuiltinPanelExtensionContext } from '@lichtblick/suite-base/components/PanelExtensionAdapter';
+import { BuiltinPanelExtensionContext } from "@lichtblick/suite-base/components/PanelExtensionAdapter";
 import { Cameras } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/Cameras";
 import { FoxgloveGrid } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/FoxgloveGrid";
 import { FrameAxes } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/FrameAxes";
@@ -52,7 +52,7 @@ export type ExtensionOverride<ExtensionType extends SceneExtension> = {
 
 // Factory function to create SceneExtensionConfig with context injection
 export function createSceneExtensionConfig(
-  context?: Partial<BuiltinPanelExtensionContext>
+  context?: Partial<BuiltinPanelExtensionContext>,
 ): SceneExtensionConfig {
   return {
     reserved: {

@@ -120,7 +120,10 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
       if (primitive == undefined) {
         continue; // Skip undefined primitives
       }
-      const pose = poses[i] ?? { position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } };
+      const pose = poses[i] ?? {
+        position: { x: 0, y: 0, z: 0 },
+        orientation: { x: 0, y: 0, z: 0, w: 1 },
+      };
 
       let shape: Renderable;
       try {
@@ -130,8 +133,10 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         // Check for invalid dimension values
         for (let j = 0; j < dimensions.length; j++) {
           const dim = dimensions[j];
-          if (typeof dim !== 'number' || !isFinite(dim) || dim <= 0) {
-            throw new Error(`Primitive at index ${i} has invalid dimension at index ${j}: ${dim} (must be positive finite number)`);
+          if (typeof dim !== "number" || !isFinite(dim) || dim <= 0) {
+            throw new Error(
+              `Primitive at index ${i} has invalid dimension at index ${j}: ${dim} (must be positive finite number)`,
+            );
           }
         }
 
@@ -185,29 +190,48 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         }
 
         // Validate pose values
-        if (!isFinite(pose.position.x) || !isFinite(pose.position.y) || !isFinite(pose.position.z)) {
-          throw new Error(`Primitive at index ${i} has invalid position values: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`);
+        if (
+          !isFinite(pose.position.x) ||
+          !isFinite(pose.position.y) ||
+          !isFinite(pose.position.z)
+        ) {
+          throw new Error(
+            `Primitive at index ${i} has invalid position values: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`,
+          );
         }
 
-        if (!isFinite(pose.orientation.x) || !isFinite(pose.orientation.y) || !isFinite(pose.orientation.z) || !isFinite(pose.orientation.w)) {
-          throw new Error(`Primitive at index ${i} has invalid orientation values: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`);
+        if (
+          !isFinite(pose.orientation.x) ||
+          !isFinite(pose.orientation.y) ||
+          !isFinite(pose.orientation.z) ||
+          !isFinite(pose.orientation.w)
+        ) {
+          throw new Error(
+            `Primitive at index ${i} has invalid orientation values: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`,
+          );
         }
 
         // Set LOCAL position/rotation relative to this container
         shape.position.set(pose.position.x, pose.position.y, pose.position.z);
-        shape.quaternion.set(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
+        shape.quaternion.set(
+          pose.orientation.x,
+          pose.orientation.y,
+          pose.orientation.z,
+          pose.orientation.w,
+        );
 
         this.add(shape); // Add as child
         this.shapes.set(`primitive_${i}`, shape);
       } catch (error) {
-        const primitiveTypeName = SolidPrimitiveType[primitive.type] || `UNKNOWN(${primitive.type})`;
+        const primitiveTypeName =
+          SolidPrimitiveType[primitive.type] || `UNKNOWN(${primitive.type})`;
         const errorMessage = `Failed to create primitive shape ${i} (type: ${primitiveTypeName}) in collision object '${this.userData.collisionObject.id}': ${error instanceof Error ? error.message : String(error)}`;
 
         // Report shape creation error to settings tree
         this.renderer.settings.errors.add(
           [...this.userData.settingsPath, "shapes"],
           `SHAPE_CREATION_ERROR_${i}`,
-          errorMessage
+          errorMessage,
         );
       }
     }
@@ -220,7 +244,10 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
       if (mesh == undefined) {
         continue; // Skip undefined meshes
       }
-      const pose = poses[i] ?? { position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } };
+      const pose = poses[i] ?? {
+        position: { x: 0, y: 0, z: 0 },
+        orientation: { x: 0, y: 0, z: 0, w: 1 },
+      };
 
       try {
         // Validate mesh data before creating shape
@@ -243,12 +270,21 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         // Validate vertex data
         for (let j = 0; j < mesh.vertices.length; j++) {
           const vertex = mesh.vertices[j];
-          if (vertex == undefined || typeof vertex.x !== 'number' || typeof vertex.y !== 'number' || typeof vertex.z !== 'number') {
-            throw new Error(`Mesh at index ${i} has invalid vertex at index ${j}: vertex must have numeric x, y, z coordinates`);
+          if (
+            vertex == undefined ||
+            typeof vertex.x !== "number" ||
+            typeof vertex.y !== "number" ||
+            typeof vertex.z !== "number"
+          ) {
+            throw new Error(
+              `Mesh at index ${i} has invalid vertex at index ${j}: vertex must have numeric x, y, z coordinates`,
+            );
           }
 
           if (!isFinite(vertex.x) || !isFinite(vertex.y) || !isFinite(vertex.z)) {
-            throw new Error(`Mesh at index ${i} has non-finite vertex coordinates at index ${j}: [${vertex.x}, ${vertex.y}, ${vertex.z}]`);
+            throw new Error(
+              `Mesh at index ${i} has non-finite vertex coordinates at index ${j}: [${vertex.x}, ${vertex.y}, ${vertex.z}]`,
+            );
           }
         }
 
@@ -260,58 +296,93 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           const vertexIndices = normalizeVertexIndices(triangle?.vertex_indices);
 
           if (vertexIndices.length !== 3) {
-            throw new Error(`Mesh at index ${i} has invalid triangle at index ${j}: vertex_indices must have exactly 3 elements, got ${vertexIndices.length}`);
+            throw new Error(
+              `Mesh at index ${i} has invalid triangle at index ${j}: vertex_indices must have exactly 3 elements, got ${vertexIndices.length}`,
+            );
           }
 
           for (let k = 0; k < 3; k++) {
             const vertexIndex = vertexIndices[k];
-            if (typeof vertexIndex !== 'number' || !Number.isInteger(vertexIndex) || vertexIndex < 0 || vertexIndex >= mesh.vertices.length) {
-              throw new Error(`Mesh at index ${i}, triangle ${j} has invalid vertex index at position ${k}: ${vertexIndex} (must be integer 0-${mesh.vertices.length - 1})`);
+            if (
+              typeof vertexIndex !== "number" ||
+              !Number.isInteger(vertexIndex) ||
+              vertexIndex < 0 ||
+              vertexIndex >= mesh.vertices.length
+            ) {
+              throw new Error(
+                `Mesh at index ${i}, triangle ${j} has invalid vertex index at position ${k}: ${vertexIndex} (must be integer 0-${mesh.vertices.length - 1})`,
+              );
             }
           }
         }
 
         // Validate pose values
-        if (!isFinite(pose.position.x) || !isFinite(pose.position.y) || !isFinite(pose.position.z)) {
-          throw new Error(`Mesh at index ${i} has invalid position values: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`);
+        if (
+          !isFinite(pose.position.x) ||
+          !isFinite(pose.position.y) ||
+          !isFinite(pose.position.z)
+        ) {
+          throw new Error(
+            `Mesh at index ${i} has invalid position values: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`,
+          );
         }
 
-        if (!isFinite(pose.orientation.x) || !isFinite(pose.orientation.y) || !isFinite(pose.orientation.z) || !isFinite(pose.orientation.w)) {
-          throw new Error(`Mesh at index ${i} has invalid orientation values: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`);
+        if (
+          !isFinite(pose.orientation.x) ||
+          !isFinite(pose.orientation.y) ||
+          !isFinite(pose.orientation.z) ||
+          !isFinite(pose.orientation.w)
+        ) {
+          throw new Error(
+            `Mesh at index ${i} has invalid orientation values: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`,
+          );
         }
 
         // Lazy loading for mesh resources to improve performance
         if (this.extension?.loadMeshResource) {
           // Use lazy loading for mesh resources
-          void this.extension.loadMeshResource(mesh).then((_geometry) => {
-            // The geometry is loaded and cached by the extension, but we still create the shape
-            // using the standard method since RenderableTriangleList handles its own geometry
-            const shape = this.createTriangleListFromMesh(mesh);
+          void this.extension
+            .loadMeshResource(mesh)
+            .then((_geometry) => {
+              // The geometry is loaded and cached by the extension, but we still create the shape
+              // using the standard method since RenderableTriangleList handles its own geometry
+              const shape = this.createTriangleListFromMesh(mesh);
 
-            // Set LOCAL position/rotation relative to this container
-            shape.position.set(pose.position.x, pose.position.y, pose.position.z);
-            shape.quaternion.set(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
+              // Set LOCAL position/rotation relative to this container
+              shape.position.set(pose.position.x, pose.position.y, pose.position.z);
+              shape.quaternion.set(
+                pose.orientation.x,
+                pose.orientation.y,
+                pose.orientation.z,
+                pose.orientation.w,
+              );
 
-            this.add(shape);
-            this.shapes.set(`mesh_${i}`, shape);
-          }).catch((error: unknown) => {
-            const errorMessage = `Failed to load mesh resource ${i} in collision object '${this.userData.collisionObject.id}': ${error instanceof Error ? error.message : String(error)}`;
-            log.warn(errorMessage);
+              this.add(shape);
+              this.shapes.set(`mesh_${i}`, shape);
+            })
+            .catch((error: unknown) => {
+              const errorMessage = `Failed to load mesh resource ${i} in collision object '${this.userData.collisionObject.id}': ${error instanceof Error ? error.message : String(error)}`;
+              log.warn(errorMessage);
 
-            // Report mesh loading error to settings tree
-            this.renderer.settings.errors.add(
-              [...this.userData.settingsPath, "shapes"],
-              `MESH_LOADING_ERROR_${i}`,
-              errorMessage
-            );
-          });
+              // Report mesh loading error to settings tree
+              this.renderer.settings.errors.add(
+                [...this.userData.settingsPath, "shapes"],
+                `MESH_LOADING_ERROR_${i}`,
+                errorMessage,
+              );
+            });
         } else {
           // Fallback to synchronous creation
           const shape = this.createTriangleListFromMesh(mesh);
 
           // Set LOCAL position/rotation relative to this container
           shape.position.set(pose.position.x, pose.position.y, pose.position.z);
-          shape.quaternion.set(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
+          shape.quaternion.set(
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w,
+          );
 
           this.add(shape);
           this.shapes.set(`mesh_${i}`, shape);
@@ -324,7 +395,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         this.renderer.settings.errors.add(
           [...this.userData.settingsPath, "shapes"],
           `MESH_LOADING_ERROR_${i}`,
-          errorMessage
+          errorMessage,
         );
       }
     }
@@ -335,26 +406,49 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
     for (let i = 0; i < planes.length; i++) {
       const plane = planes[i];
       if (plane == undefined) {
-        log.warn(`Plane at index ${i} in collision object '${this.userData.collisionObject.id}' is null or undefined, skipping`);
+        log.warn(
+          `Plane at index ${i} in collision object '${this.userData.collisionObject.id}' is null or undefined, skipping`,
+        );
         continue;
       }
-      const pose = poses[i] ?? { position: { x: 0, y: 0, z: 0 }, orientation: { x: 0, y: 0, z: 0, w: 1 } };
+      const pose = poses[i] ?? {
+        position: { x: 0, y: 0, z: 0 },
+        orientation: { x: 0, y: 0, z: 0, w: 1 },
+      };
 
       try {
         // Validate pose values
-        if (!isFinite(pose.position.x) || !isFinite(pose.position.y) || !isFinite(pose.position.z)) {
-          throw new Error(`Plane at index ${i} has invalid position values: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`);
+        if (
+          !isFinite(pose.position.x) ||
+          !isFinite(pose.position.y) ||
+          !isFinite(pose.position.z)
+        ) {
+          throw new Error(
+            `Plane at index ${i} has invalid position values: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`,
+          );
         }
 
-        if (!isFinite(pose.orientation.x) || !isFinite(pose.orientation.y) || !isFinite(pose.orientation.z) || !isFinite(pose.orientation.w)) {
-          throw new Error(`Plane at index ${i} has invalid orientation values: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`);
+        if (
+          !isFinite(pose.orientation.x) ||
+          !isFinite(pose.orientation.y) ||
+          !isFinite(pose.orientation.z) ||
+          !isFinite(pose.orientation.w)
+        ) {
+          throw new Error(
+            `Plane at index ${i} has invalid orientation values: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`,
+          );
         }
 
         const shape = this.createPlaneShape();
 
         // Set LOCAL position/rotation relative to this container
         shape.position.set(pose.position.x, pose.position.y, pose.position.z);
-        shape.quaternion.set(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w);
+        shape.quaternion.set(
+          pose.orientation.x,
+          pose.orientation.y,
+          pose.orientation.z,
+          pose.orientation.w,
+        );
 
         this.add(shape);
         this.shapes.set(`plane_${i}`, shape);
@@ -366,7 +460,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         this.renderer.settings.errors.add(
           [...this.userData.settingsPath, "shapes"],
           `SHAPE_CREATION_ERROR_PLANE_${i}`,
-          errorMessage
+          errorMessage,
         );
       }
     }
@@ -375,34 +469,64 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
   // Helper methods for specific primitive types
   private createBoxShape(dimensions: number[]): RenderableCube {
     const marker = this.createMarkerFromDimensions(MarkerType.CUBE, dimensions);
-    return new RenderableCube(this.userData.topic ?? "", marker, this.userData.receiveTime, this.renderer);
+    return new RenderableCube(
+      this.userData.topic ?? "",
+      marker,
+      this.userData.receiveTime,
+      this.renderer,
+    );
   }
 
   private createSphereShape(dimensions: number[]): RenderableSphere {
     const marker = this.createMarkerFromDimensions(MarkerType.SPHERE, dimensions);
-    return new RenderableSphere(this.userData.topic ?? "", marker, this.userData.receiveTime, this.renderer);
+    return new RenderableSphere(
+      this.userData.topic ?? "",
+      marker,
+      this.userData.receiveTime,
+      this.renderer,
+    );
   }
 
   private createCylinderShape(dimensions: number[]): RenderableCylinder {
     const marker = this.createMarkerFromDimensions(MarkerType.CYLINDER, dimensions);
-    return new RenderableCylinder(this.userData.topic ?? "", marker, this.userData.receiveTime, this.renderer);
+    return new RenderableCylinder(
+      this.userData.topic ?? "",
+      marker,
+      this.userData.receiveTime,
+      this.renderer,
+    );
   }
 
   private createConeShape(dimensions: number[]): RenderableCone {
     const marker = this.createMarkerFromDimensions(MarkerType.CYLINDER, dimensions); // Use CYLINDER type for cone
-    return new RenderableCone(this.userData.topic ?? "", marker, this.userData.receiveTime, this.renderer);
+    return new RenderableCone(
+      this.userData.topic ?? "",
+      marker,
+      this.userData.receiveTime,
+      this.renderer,
+    );
   }
 
   private createTriangleListFromMesh(mesh: Mesh): RenderableTriangleList {
     const marker = this.createTriangleListMarker(mesh);
-    return new RenderableTriangleList(this.userData.topic ?? "", marker, this.userData.receiveTime, this.renderer);
+    return new RenderableTriangleList(
+      this.userData.topic ?? "",
+      marker,
+      this.userData.receiveTime,
+      this.renderer,
+    );
   }
 
   private createPlaneShape(): RenderablePlane {
     // Create a proper plane marker - RenderablePlane uses THREE.PlaneGeometry internally
     // We use CUBE marker type but RenderablePlane will render it as a plane
     const marker = this.createMarkerFromDimensions(MarkerType.CUBE, [10, 10, 1]); // Width, height, depth (depth ignored for plane)
-    return new RenderablePlane(this.userData.topic ?? "", marker, this.userData.receiveTime, this.renderer);
+    return new RenderablePlane(
+      this.userData.topic ?? "",
+      marker,
+      this.userData.receiveTime,
+      this.renderer,
+    );
   }
 
   // Helper to create a marker from primitive dimensions

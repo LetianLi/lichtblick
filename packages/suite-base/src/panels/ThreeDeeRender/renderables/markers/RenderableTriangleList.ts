@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { RenderableMarker } from "./RenderableMarker";
 import { markerHasTransparency, makeStandardVertexColorMaterial } from "./materials";
 import { DynamicBufferGeometry } from "../../DynamicBufferGeometry";
-import { IRenderer } from "../../IRenderer";
+import type { IRenderer } from "../../IRenderer";
 import { rgbaToLinear } from "../../color";
 import { Marker, Vector3 } from "../../ros";
 
@@ -42,10 +42,7 @@ export class RenderableTriangleList extends RenderableMarker {
     this.add(this.#mesh);
 
     // Triangle list outline - initialize with empty geometry, will be updated when mesh data is available
-    this.#outline = new THREE.LineSegments(
-      new THREE.BufferGeometry(),
-      renderer.outlineMaterial,
-    );
+    this.#outline = new THREE.LineSegments(new THREE.BufferGeometry(), renderer.outlineMaterial);
     this.#outline.userData.picking = false;
     this.#mesh.add(this.#outline);
 
@@ -153,7 +150,11 @@ export class RenderableTriangleList extends RenderableMarker {
 
       // Update the outline geometry to match the new mesh geometry
       // Only create outline if we have valid geometry with vertices
-      if (vertexCount > 0 && geometry.attributes.position && geometry.attributes.position.count > 0) {
+      if (
+        vertexCount > 0 &&
+        geometry.attributes.position &&
+        geometry.attributes.position.count > 0
+      ) {
         this.#outline.geometry.dispose();
         this.#outline.geometry = new THREE.EdgesGeometry(geometry, 40);
       }

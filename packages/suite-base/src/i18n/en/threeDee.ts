@@ -117,17 +117,22 @@ export const threeDee = {
   notLoaded: "Not loaded",
 
   // Error messages
-  serviceClientUnavailable: "Service client not available - cannot fetch initial planning scene. Make sure you are connected to a ROS system with the planning scene service.",
-  onlyOnePlanningSceneAllowed: "Only one planning scene can exist at a time. Please delete the existing planning scene before adding a new one.",
-  invalidPlanningSceneData: "Invalid planning scene data received from service - see message processing errors for details",
-  collisionObjectMissingId: "Collision object missing required 'id' field, cannot process operation",
+  serviceClientUnavailable:
+    "Service client not available - cannot fetch initial planning scene. Make sure you are connected to a ROS system with the planning scene service.",
+  onlyOnePlanningSceneAllowed:
+    "Only one planning scene can exist at a time. Please delete the existing planning scene before adding a new one.",
+  invalidPlanningSceneData:
+    "Invalid planning scene data received from service - see message processing errors for details",
+  collisionObjectMissingId:
+    "Collision object missing required 'id' field, cannot process operation",
   poseRequired: "Pose is required",
   headerRequired: "Header is required",
   meshNoVertices: "Mesh has no vertices",
   meshNoTriangles: "Mesh has no triangles",
   invalidVertexData: "Invalid vertex data",
   octomapNotImplemented: "Octomap rendering is not yet implemented.",
-  octomapNotImplementedHelp: "Octomap rendering is not yet implemented. The closest substitute is the Occupancy Grid.",
+  octomapNotImplementedHelp:
+    "Octomap rendering is not yet implemented. The closest substitute is the Occupancy Grid.",
 
   // Image annotations
   imageAnnotations: "Image annotations",

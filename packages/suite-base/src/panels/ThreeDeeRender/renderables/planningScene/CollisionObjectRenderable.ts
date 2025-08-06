@@ -117,16 +117,16 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
   private createPrimitiveShapes(primitives: SolidPrimitive[], poses: Pose[]): void {
     for (let i = 0; i < primitives.length; i++) {
       const primitive = primitives[i];
-      if (primitive == undefined) {
-        continue; // Skip undefined primitives
-      }
-      const pose = poses[i] ?? {
-        position: { x: 0, y: 0, z: 0 },
-        orientation: { x: 0, y: 0, z: 0, w: 1 },
-      };
-
-      let shape: Renderable;
       try {
+        if (primitive == undefined) {
+          throw new Error(`Primitive is undefined`);
+        }
+        const pose = poses[i] ?? {
+          position: { x: 0, y: 0, z: 0 },
+          orientation: { x: 0, y: 0, z: 0, w: 1 },
+        };
+
+        let shape: Renderable;
         // Normalize dimensions to handle arrays from ROS messages
         const dimensions = normalizeDimensions(primitive.dimensions);
 
@@ -135,7 +135,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           const dim = dimensions[j];
           if (typeof dim !== "number" || !isFinite(dim) || dim <= 0) {
             throw new Error(
-              `Primitive at index ${i} has invalid dimension at index ${j}: ${dim} (must be positive finite number)`,
+              `Invalid dimension[${j}]: ${dim} (must be positive finite number)`,
             );
           }
         }
@@ -145,7 +145,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 3) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Box primitive at index ${i} requires 3 dimensions [${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? 's' : ''}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createBoxShape(dimensions);
@@ -155,7 +155,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 1) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Sphere primitive at index ${i} requires 1 dimension [${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? 's' : ''}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createSphereShape(dimensions);
@@ -165,7 +165,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 2) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Cylinder primitive at index ${i} requires 2 dimensions [${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? 's' : ''}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createCylinderShape(dimensions);
@@ -175,17 +175,16 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 2) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Cone primitive at index ${i} requires 2 dimensions [${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? 's' : ''}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createConeShape(dimensions);
             break;
           }
           default: {
-            log.warn(
-              `Unsupported primitive type ${primitive.type} at index ${i} in collision object '${this.userData.collisionObject.id}', skipping`,
+            throw new Error(
+              `Unsupported primitive type`,
             );
-            continue; // Skip unsupported primitives
           }
         }
 
@@ -196,7 +195,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           !isFinite(pose.position.z)
         ) {
           throw new Error(
-            `Primitive at index ${i} has invalid position values: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`,
+            `Invalid position: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`,
           );
         }
 
@@ -207,7 +206,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           !isFinite(pose.orientation.w)
         ) {
           throw new Error(
-            `Primitive at index ${i} has invalid orientation values: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`,
+            `Invalid orientation: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`,
           );
         }
 
@@ -223,9 +222,10 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         this.add(shape); // Add as child
         this.shapes.set(`primitive_${i}`, shape);
       } catch (error) {
-        const primitiveTypeName =
-          SolidPrimitiveType[primitive.type] || `UNKNOWN(${primitive.type})`;
-        const errorMessage = `Failed to create primitive shape ${i} (type: ${primitiveTypeName}) in collision object '${this.userData.collisionObject.id}': ${error instanceof Error ? error.message : String(error)}`;
+        const primitiveTypeName = primitive
+          ? SolidPrimitiveType[primitive.type] || `UNKNOWN`
+          : "UNDEFINED";
+        const errorMessage = `Failed to create primitive[${i}] (${primitiveTypeName}): ${error instanceof Error ? error.message : String(error)}`;
 
         // Report shape creation error to settings tree
         this.renderer.settings.errors.add(
@@ -241,15 +241,15 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
   private createMeshShapes(meshes: Mesh[], poses: Pose[]): void {
     for (let i = 0; i < meshes.length; i++) {
       const mesh = meshes[i];
-      if (mesh == undefined) {
-        continue; // Skip undefined meshes
-      }
-      const pose = poses[i] ?? {
-        position: { x: 0, y: 0, z: 0 },
-        orientation: { x: 0, y: 0, z: 0, w: 1 },
-      };
-
       try {
+        if (mesh == undefined) {
+          throw new Error(`Mesh is undefined`);
+        }
+        const pose = poses[i] ?? {
+          position: { x: 0, y: 0, z: 0 },
+          orientation: { x: 0, y: 0, z: 0, w: 1 },
+        };
+
         // Validate mesh data before creating shape
         if (!Array.isArray(mesh.vertices)) {
           throw new Error(`Mesh at index ${i} has no vertices or invalid vertices array`);
@@ -362,7 +362,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             })
             .catch((error: unknown) => {
               const errorMessage = `Failed to load mesh resource ${i} in collision object '${this.userData.collisionObject.id}': ${error instanceof Error ? error.message : String(error)}`;
-              log.warn(errorMessage);
 
               // Report mesh loading error to settings tree
               this.renderer.settings.errors.add(
@@ -389,7 +388,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         }
       } catch (error) {
         const errorMessage = `Failed to create mesh shape ${i} in collision object '${this.userData.collisionObject.id}': ${error instanceof Error ? error.message : String(error)}`;
-        log.warn(errorMessage);
 
         // Report mesh loading error to settings tree
         this.renderer.settings.errors.add(
@@ -405,18 +403,42 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
   private createPlaneShapes(planes: Plane[], poses: Pose[]): void {
     for (let i = 0; i < planes.length; i++) {
       const plane = planes[i];
-      if (plane == undefined) {
-        log.warn(
-          `Plane at index ${i} in collision object '${this.userData.collisionObject.id}' is null or undefined, skipping`,
-        );
-        continue;
-      }
-      const pose = poses[i] ?? {
-        position: { x: 0, y: 0, z: 0 },
-        orientation: { x: 0, y: 0, z: 0, w: 1 },
-      };
-
       try {
+        if (plane == undefined) {
+          throw new Error(`Plane is undefined`);
+        }
+        const pose = poses[i] ?? {
+          position: { x: 0, y: 0, z: 0 },
+          orientation: { x: 0, y: 0, z: 0, w: 1 },
+        };
+
+                // Validate plane coefficients
+        if (!plane.coef || plane.coef.length !== 4) {
+          throw new Error(
+            `Expected 4 coefficients, got ${plane.coef?.length ?? 0}`,
+          );
+        }
+
+        // Extract and validate plane coefficients
+        const a = plane.coef[0];
+        const b = plane.coef[1];
+        const c = plane.coef[2];
+        const d = plane.coef[3];
+
+        // Check for invalid coefficient values (NaN, Infinity, etc.)
+        if (!isFinite(a) || !isFinite(b) || !isFinite(c) || !isFinite(d)) {
+          throw new Error(
+            `Invalid coefficient: [${a}, ${b}, ${c}, ${d}] (must be finite numbers)`,
+          );
+        }
+
+        // Check for zero normal vector (all coefficients zero)
+        if (a === 0 && b === 0 && c === 0) {
+          throw new Error(
+            `Zero normal vector: [${a}, ${b}, ${c}, ${d}] (at least one of a, b, c must be non-zero)`,
+          );
+        }
+
         // Validate pose values
         if (
           !isFinite(pose.position.x) ||
@@ -424,7 +446,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           !isFinite(pose.position.z)
         ) {
           throw new Error(
-            `Plane at index ${i} has invalid position values: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`,
+            `Invalid position: [${pose.position.x}, ${pose.position.y}, ${pose.position.z}]`,
           );
         }
 
@@ -435,26 +457,36 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           !isFinite(pose.orientation.w)
         ) {
           throw new Error(
-            `Plane at index ${i} has invalid orientation values: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`,
+            `Invalid orientation: [${pose.orientation.x}, ${pose.orientation.y}, ${pose.orientation.z}, ${pose.orientation.w}]`,
           );
         }
 
         const shape = this.createPlaneShape();
 
+        // Calculate plane orientation from equation ax + by + cz + d = 0
+        // The normal vector is (a, b, c)
+        const normal = new THREE.Vector3(a, b, c).normalize();
+
+        // Create a quaternion that rotates the default plane normal (0, 0, 1) to the desired normal
+        const rotationMatrix = new THREE.Matrix4();
+        rotationMatrix.lookAt(new THREE.Vector3(0, 0, 0), normal, new THREE.Vector3(0, 1, 0));
+        const planeQuaternion = new THREE.Quaternion().setFromRotationMatrix(rotationMatrix);
+
+        // Combine the plane equation orientation with the pose orientation
+        const combinedQuaternion = new THREE.Quaternion();
+        combinedQuaternion.multiplyQuaternions(
+          new THREE.Quaternion(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w),
+          planeQuaternion
+        );
+
         // Set LOCAL position/rotation relative to this container
         shape.position.set(pose.position.x, pose.position.y, pose.position.z);
-        shape.quaternion.set(
-          pose.orientation.x,
-          pose.orientation.y,
-          pose.orientation.z,
-          pose.orientation.w,
-        );
+        shape.quaternion.copy(combinedQuaternion);
 
         this.add(shape);
         this.shapes.set(`plane_${i}`, shape);
       } catch (error) {
-        const errorMessage = `Failed to create plane shape ${i} in collision object '${this.userData.collisionObject.id}': ${error instanceof Error ? error.message : String(error)}`;
-        log.warn(errorMessage);
+        const errorMessage = `Failed to create plane[${i}]: ${error instanceof Error ? error.message : String(error)}`;
 
         // Report plane creation error to settings tree
         this.renderer.settings.errors.add(
@@ -520,6 +552,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
   private createPlaneShape(): RenderablePlane {
     // Create a proper plane marker - RenderablePlane uses THREE.PlaneGeometry internally
     // We use CUBE marker type but RenderablePlane will render it as a plane
+    // The plane equation ax + by + cz + d = 0 will be handled by the pose orientation
     const marker = this.createMarkerFromDimensions(MarkerType.CUBE, [10, 10, 1]); // Width, height, depth (depth ignored for plane)
     return new RenderablePlane(
       this.userData.topic ?? "",

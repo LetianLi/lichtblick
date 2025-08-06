@@ -34,7 +34,9 @@ export class RenderablePlane extends RenderableMarker {
       `${this.constructor.name}-plane-edges`,
       () => createEdgesGeometry(planeGeometry),
     );
-    this.#mesh = new THREE.Mesh(planeGeometry, makeStandardMaterial(marker.color));
+    const material = makeStandardMaterial(marker.color);
+    material.side = THREE.DoubleSide; // Make the plane visible from both sides
+    this.#mesh = new THREE.Mesh(planeGeometry, material);
     this.#mesh.castShadow = true;
     this.#mesh.receiveShadow = true;
     this.add(this.#mesh);

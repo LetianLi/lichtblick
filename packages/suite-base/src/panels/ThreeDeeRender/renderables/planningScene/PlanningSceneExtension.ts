@@ -264,7 +264,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     for (let i = 0; i < object.primitives.length; i++) {
       const p = object.primitives[i];
       const pose = object.primitive_poses[i];
-      if (p && pose) {
+      if (p && pose && p.dimensions) {
         const roundedDims = p.dimensions.map((d) => Math.round(d * 1000) / 1000);
         const roundedPrimPose = {
           x: Math.round(pose.position.x * 1000) / 1000,
@@ -281,7 +281,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     for (let i = 0; i < object.meshes.length; i++) {
       const m = object.meshes[i];
       const pose = object.mesh_poses[i];
-      if (m && pose) {
+      if (m && pose && m.vertices && m.triangles) {
         // Create a simple structural hash of the mesh
         let structureHash = m.vertices.length * 1000 + m.triangles.length;
         // Sample first few vertices for uniqueness
@@ -363,6 +363,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Get shared geometry for mesh data to improve performance by reusing identical meshes
   public getSharedMeshGeometry(meshData: Mesh): string {
     // Create a cache key based on mesh structure for sharing identical meshes
+    if (!meshData.vertices || !meshData.triangles) {
+      return `mesh_invalid_${crypto.randomUUID()}`; // Return unique hash for invalid meshes
+    }
+
     const vertexCount = meshData.vertices.length;
     const triangleCount = meshData.triangles.length;
 

@@ -3,6 +3,7 @@
 // SPDX-FileCopyrightText: Copyright (C) 2023-2025 Bayerische Motoren Werke Aktiengesellschaft (BMW AG)<lichtblick@bmwgroup.com>
 // SPDX-License-Identifier: MPL-2.0
 
+import { waitFor } from "@testing-library/react";
 import * as THREE from "three";
 
 import { CollisionObjectRenderable } from "./CollisionObjectRenderable";
@@ -166,6 +167,7 @@ describe("PlanningSceneExtension", () => {
     (service: string, request: unknown) => Promise<unknown>
   >;
   let extension: PlanningSceneExtension;
+  let consoleSpy: jest.SpyInstance | undefined;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -176,6 +178,10 @@ describe("PlanningSceneExtension", () => {
 
   afterEach(() => {
     extension.dispose();
+    if (consoleSpy) {
+      consoleSpy.mockRestore();
+      consoleSpy = undefined;
+    }
   });
 
   describe("Basic Interface", () => {
@@ -242,33 +248,34 @@ describe("PlanningSceneExtension", () => {
       mockServiceClient.mockResolvedValueOnce(testResponse);
 
       extension.retryFetchInitialScene();
-      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(mockServiceClient).toHaveBeenCalledWith("/get_planning_scene", expect.any(Object));
+      await waitFor(() => {
+        expect(mockServiceClient).toHaveBeenCalledWith("/get_planning_scene", expect.any(Object));
+      });
     });
 
     it("handles service errors gracefully", async () => {
-      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
+      consoleSpy = jest.spyOn(console, "warn").mockImplementation();
       mockServiceClient.mockRejectedValueOnce(new Error("Service unavailable"));
 
       extension.retryFetchInitialScene();
-      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(extension.hasInitialScene()).toBe(false);
-      expect(consoleSpy).toHaveBeenCalled();
-      consoleSpy.mockRestore();
+      await waitFor(() => {
+        expect(extension.hasInitialScene()).toBe(false);
+        expect(consoleSpy).toHaveBeenCalled();
+      });
     });
 
     it("handles malformed service responses", async () => {
-      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
+      consoleSpy = jest.spyOn(console, "warn").mockImplementation();
       mockServiceClient.mockResolvedValueOnce({ invalid: "response" });
 
       extension.retryFetchInitialScene();
-      await new Promise((resolve) => setTimeout(resolve, 0));
 
-      expect(extension.hasInitialScene()).toBe(false);
-      expect(consoleSpy).toHaveBeenCalled();
-      consoleSpy.mockRestore();
+      await waitFor(() => {
+        expect(extension.hasInitialScene()).toBe(false);
+        expect(consoleSpy).toHaveBeenCalled();
+      });
     });
   });
 
@@ -411,7 +418,7 @@ describe("PlanningSceneExtension", () => {
     });
 
     it("integrates with transform system via inherited startFrame", () => {
-      const consoleSpy = jest.spyOn(console, "warn").mockImplementation();
+      consoleSpy = jest.spyOn(console, "warn").mockImplementation();
 
       setupLayer();
       const scene = createPlanningScene([createCollisionObject("test_object")]);

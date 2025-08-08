@@ -7,7 +7,6 @@
 
 import * as THREE from "three";
 
-import Logger from "@lichtblick/log";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import {
@@ -47,10 +46,6 @@ export type CollisionObjectUserData = BaseUserData & {
   collisionObject: CollisionObject;
   shapes: Map<string, Renderable>;
 };
-
-// Note: Default color is now provided by the extension settings, not hardcoded here
-
-const log = Logger.getLogger(__filename);
 
 export class CollisionObjectRenderable extends Renderable<CollisionObjectUserData> {
   private shapes = new Map<string, Renderable>();
@@ -134,9 +129,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         for (let j = 0; j < dimensions.length; j++) {
           const dim = dimensions[j];
           if (typeof dim !== "number" || !isFinite(dim) || dim <= 0) {
-            throw new Error(
-              `Invalid dimension[${j}]: ${dim} (must be positive finite number)`,
-            );
+            throw new Error(`Invalid dimension[${j}]: ${dim} (must be positive finite number)`);
           }
         }
 
@@ -145,7 +138,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 3) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? 's' : ''}[${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createBoxShape(dimensions);
@@ -155,7 +148,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 1) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? 's' : ''}[${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createSphereShape(dimensions);
@@ -165,7 +158,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 2) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? 's' : ''}[${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createCylinderShape(dimensions);
@@ -175,16 +168,14 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 2) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? 's' : ''}[${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createConeShape(dimensions);
             break;
           }
           default: {
-            throw new Error(
-              `Unsupported primitive type`,
-            );
+            throw new Error(`Unsupported primitive type`);
           }
         }
 
@@ -412,13 +403,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           orientation: { x: 0, y: 0, z: 0, w: 1 },
         };
 
-                // Validate plane coefficients
-        if (!plane.coef || plane.coef.length !== 4) {
-          throw new Error(
-            `Expected 4 coefficients, got ${plane.coef?.length ?? 0}`,
-          );
-        }
-
         // Extract and validate plane coefficients
         const a = plane.coef[0];
         const b = plane.coef[1];
@@ -427,9 +411,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
 
         // Check for invalid coefficient values (NaN, Infinity, etc.)
         if (!isFinite(a) || !isFinite(b) || !isFinite(c) || !isFinite(d)) {
-          throw new Error(
-            `Invalid coefficient: [${a}, ${b}, ${c}, ${d}] (must be finite numbers)`,
-          );
+          throw new Error(`Invalid coefficient: [${a}, ${b}, ${c}, ${d}] (must be finite numbers)`);
         }
 
         // Check for zero normal vector (all coefficients zero)
@@ -475,8 +457,13 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         // Combine the plane equation orientation with the pose orientation
         const combinedQuaternion = new THREE.Quaternion();
         combinedQuaternion.multiplyQuaternions(
-          new THREE.Quaternion(pose.orientation.x, pose.orientation.y, pose.orientation.z, pose.orientation.w),
-          planeQuaternion
+          new THREE.Quaternion(
+            pose.orientation.x,
+            pose.orientation.y,
+            pose.orientation.z,
+            pose.orientation.w,
+          ),
+          planeQuaternion,
         );
 
         // Set LOCAL position/rotation relative to this container

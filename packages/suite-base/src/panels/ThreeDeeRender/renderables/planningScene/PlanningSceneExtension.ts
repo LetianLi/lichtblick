@@ -34,6 +34,8 @@ import {
   RobotState,
   AttachedCollisionObject,
   createMinimalPlanningSceneComponents,
+  normalizeDimensions,
+  normalizeVertexIndices,
 } from "./types";
 import type { IRenderer, AnyRendererSubscription } from "../../IRenderer";
 import { Renderable } from "../../Renderable";
@@ -264,7 +266,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     for (let i = 0; i < object.primitives.length; i++) {
       const p = object.primitives[i];
       const pose = object.primitive_poses[i];
-      if (p && pose && p.dimensions) {
+      if (p && pose) {
         const roundedDims = p.dimensions.map((d) => Math.round(d * 1000) / 1000);
         const roundedPrimPose = {
           x: Math.round(pose.position.x * 1000) / 1000,
@@ -281,7 +283,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     for (let i = 0; i < object.meshes.length; i++) {
       const m = object.meshes[i];
       const pose = object.mesh_poses[i];
-      if (m && pose && m.vertices && m.triangles) {
+      if (m && pose) {
         // Create a simple structural hash of the mesh
         let structureHash = m.vertices.length * 1000 + m.triangles.length;
         // Sample first few vertices for uniqueness
@@ -363,8 +365,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Get shared geometry for mesh data to improve performance by reusing identical meshes
   public getSharedMeshGeometry(meshData: Mesh): string {
     // Create a cache key based on mesh structure for sharing identical meshes
-    if (!meshData.vertices || !meshData.triangles) {
-      return `mesh_invalid_${crypto.randomUUID()}`; // Return unique hash for invalid meshes
+    if (meshData.vertices.length === 0 || meshData.triangles.length === 0) {
+      return `mesh_invalid_${crypto.randomUUID()}`; // Return unique hash for empty meshes
     }
 
     const vertexCount = meshData.vertices.length;
@@ -1636,7 +1638,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       operation === CollisionObjectOperation.APPEND ||
       operation === CollisionObjectOperation.MOVE
     ) {
-      const fullObject = object as CollisionObject;
+      const fullObject = this.ensureFullCollisionObject(object);
       if (!this.hasObjectChanged(fullObject)) {
         // Object hasn't changed, skip processing
         return;
@@ -1737,8 +1739,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         );
       }
 
-      // Cast to full type after validation
-      const fullObject = object as CollisionObject;
+      // Ensure all properties are fully populated
+      const fullObject = this.ensureFullCollisionObject(object);
 
       // Count geometry for logging
       const primitiveCount = fullObject.primitives.length;
@@ -2145,6 +2147,101 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         nsec: partialHeader.stamp?.nsec ?? 0,
       },
       seq: partialHeader.seq,
+    };
+  }
+
+  // Helper function to ensure a partial collision object becomes a full collision object
+  private ensureFullCollisionObject(
+    partialObject: PartialMessage<CollisionObject>,
+  ): CollisionObject {
+    if (!partialObject.id) {
+      throw new Error(t("threeDee:collisionObjectMissingId"));
+    }
+
+    if (partialObject.operation == undefined) {
+      throw new Error(`Collision object '${partialObject.id}' missing required 'operation' field`);
+    }
+
+    return {
+      header: this.ensureFullHeader(partialObject.header),
+      pose: this.ensureFullPose(partialObject.pose),
+      id: partialObject.id,
+      type: {
+        key: partialObject.type?.key ?? "",
+        db: partialObject.type?.db ?? "",
+      },
+      primitives:
+        partialObject.primitives?.map((primitive) => {
+          if (!primitive) {
+            throw new Error(
+              `Primitive in collision object '${partialObject.id}' is null or undefined`,
+            );
+          }
+          if (primitive.type == undefined) {
+            throw new Error(
+              `Primitive in collision object '${partialObject.id}' has invalid or missing 'type' field`,
+            );
+          }
+          if (!primitive.dimensions || !Array.isArray(primitive.dimensions)) {
+            throw new Error(
+              `Primitive in collision object '${partialObject.id}' has invalid or missing 'dimensions' field`,
+            );
+          }
+          return {
+            type: primitive.type,
+            dimensions: normalizeDimensions(primitive.dimensions),
+          };
+        }) ?? [],
+      primitive_poses:
+        partialObject.primitive_poses?.map((pose) => this.ensureFullPose(pose)) ?? [],
+      meshes:
+        partialObject.meshes?.map((mesh) => {
+          if (!mesh) {
+            throw new Error(`Mesh in collision object '${partialObject.id}' is null or undefined`);
+          }
+          if (!mesh.vertices || !Array.isArray(mesh.vertices)) {
+            throw new Error(
+              `Mesh in collision object '${partialObject.id}' has invalid or missing 'vertices' field`,
+            );
+          }
+          if (!mesh.triangles || !Array.isArray(mesh.triangles)) {
+            throw new Error(
+              `Mesh in collision object '${partialObject.id}' has invalid or missing 'triangles' field`,
+            );
+          }
+          return {
+            vertices: mesh.vertices.filter(
+              (v): v is { x: number; y: number; z: number } => v != undefined,
+            ),
+            triangles: mesh.triangles.map((triangle) => {
+              if (!triangle?.vertex_indices) {
+                throw new Error(
+                  `Triangle in collision object '${partialObject.id}' has invalid or missing 'vertex_indices' field`,
+                );
+              }
+              return {
+                vertex_indices: new Uint32Array(normalizeVertexIndices(triangle.vertex_indices)),
+              };
+            }),
+          };
+        }) ?? [],
+      mesh_poses: partialObject.mesh_poses?.map((pose) => this.ensureFullPose(pose)) ?? [],
+      planes:
+        partialObject.planes?.map((plane) => {
+          if (!plane?.coef || !Array.isArray(plane.coef) || plane.coef.length !== 4) {
+            throw new Error(
+              `Plane in collision object '${partialObject.id}' has invalid or missing 'coef' field`,
+            );
+          }
+          return {
+            coef: plane.coef as [number, number, number, number],
+          };
+        }) ?? [],
+      plane_poses: partialObject.plane_poses?.map((pose) => this.ensureFullPose(pose)) ?? [],
+      subframe_names:
+        partialObject.subframe_names?.filter((name): name is string => name != undefined) ?? [],
+      subframe_poses: partialObject.subframe_poses?.map((pose) => this.ensureFullPose(pose)) ?? [],
+      operation: partialObject.operation,
     };
   }
 

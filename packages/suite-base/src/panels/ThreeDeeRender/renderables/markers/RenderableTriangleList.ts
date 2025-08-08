@@ -10,7 +10,7 @@ import * as THREE from "three";
 import { RenderableMarker } from "./RenderableMarker";
 import { markerHasTransparency, makeStandardVertexColorMaterial } from "./materials";
 import { DynamicBufferGeometry } from "../../DynamicBufferGeometry";
-import type { Renderer } from "../../Renderer";
+import type { IRenderer } from "../../IRenderer";
 import { rgbaToLinear } from "../../color";
 import { Marker, Vector3 } from "../../ros";
 
@@ -23,12 +23,13 @@ const tempColor = { r: 0, g: 0, b: 0, a: 0 };
 
 export class RenderableTriangleList extends RenderableMarker {
   #mesh: THREE.Mesh<DynamicBufferGeometry, THREE.MeshStandardMaterial>;
+  #outline: THREE.LineSegments;
 
   public constructor(
     topic: string,
     marker: Marker,
     receiveTime: bigint | undefined,
-    renderer: Renderer,
+    renderer: IRenderer,
   ) {
     super(topic, marker, receiveTime, renderer);
 
@@ -40,12 +41,18 @@ export class RenderableTriangleList extends RenderableMarker {
     this.#mesh.receiveShadow = true;
     this.add(this.#mesh);
 
+    // Triangle list outline - initialize with empty geometry, will be updated when mesh data is available
+    this.#outline = new THREE.LineSegments(new THREE.BufferGeometry(), renderer.outlineMaterial);
+    this.#outline.userData.picking = false;
+    this.#mesh.add(this.#outline);
+
     this.update(marker, receiveTime);
   }
 
   public override dispose(): void {
     this.#mesh.material.dispose();
     this.#mesh.geometry.dispose();
+    this.#outline.geometry.dispose();
   }
 
   public override update(newMarker: Marker, receiveTime: bigint | undefined): void {
@@ -140,7 +147,21 @@ export class RenderableTriangleList extends RenderableMarker {
       // Build the vertex normal attribute from the position buffer (averaging face normals)
       geometry.computeVertexNormals();
       geometry.computeBoundingSphere();
+
+      // Update the outline geometry to match the new mesh geometry
+      // Only create outline if we have valid geometry with vertices
+      if (
+        vertexCount > 0 &&
+        geometry.attributes.position &&
+        geometry.attributes.position.count > 0
+      ) {
+        this.#outline.geometry.dispose();
+        this.#outline.geometry = new THREE.EdgesGeometry(geometry, 40);
+      }
     }
+
+    // Update outline visibility based on settings
+    this.#outline.visible = (this.getSettings()?.showOutlines ?? true) && vertexCount > 0;
   }
 }
 

@@ -445,30 +445,33 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
 
         const shape = this.createPlaneShape();
 
-        // Calculate plane orientation from equation ax + by + cz + d = 0
-        // The normal vector is (a, b, c)
-        const normal = new THREE.Vector3(a, b, c).normalize();
+        // Normal vector and magnitude
+        const nLen = Math.hypot(a, b, c);
+        const normal = new THREE.Vector3(a, b, c).divideScalar(nLen);
 
-        // Create a quaternion that rotates the default plane normal (0, 0, 1) to the desired normal
-        const rotationMatrix = new THREE.Matrix4();
-        rotationMatrix.lookAt(new THREE.Vector3(0, 0, 0), normal, new THREE.Vector3(0, 1, 0));
-        const planeQuaternion = new THREE.Quaternion().setFromRotationMatrix(rotationMatrix);
-
-        // Combine the plane equation orientation with the pose orientation
-        const combinedQuaternion = new THREE.Quaternion();
-        combinedQuaternion.multiplyQuaternions(
-          new THREE.Quaternion(
-            pose.orientation.x,
-            pose.orientation.y,
-            pose.orientation.z,
-            pose.orientation.w,
-          ),
-          planeQuaternion,
+        // Rotate +Z to plane normal
+        const planeQuaternion = new THREE.Quaternion().setFromUnitVectors(
+          new THREE.Vector3(0, 0, 1),
+          normal,
         );
 
-        // Set LOCAL position/rotation relative to this container
-        shape.position.set(pose.position.x, pose.position.y, pose.position.z);
+        // Combine pose orientation with plane orientation: pose * plane
+        const poseQuat = new THREE.Quaternion(
+          pose.orientation.x,
+          pose.orientation.y,
+          pose.orientation.z,
+          pose.orientation.w,
+        );
+        const combinedQuaternion = poseQuat.clone().multiply(planeQuaternion);
         shape.quaternion.copy(combinedQuaternion);
+
+        // Apply plane offset along normal: offset = -(d / |n|) * n, rotated by pose orientation
+        const offsetLocal = normal.clone().multiplyScalar(-d / nLen).applyQuaternion(poseQuat);
+        shape.position.set(
+          pose.position.x + offsetLocal.x,
+          pose.position.y + offsetLocal.y,
+          pose.position.z + offsetLocal.z,
+        );
 
         this.add(shape);
         this.shapes.set(`plane_${i}`, shape);

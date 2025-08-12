@@ -629,10 +629,12 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         };
 
         // Add collision objects section for this layer
-        if (this.renderables.size > 0) {
+        const collisionChildren = this.getCollisionObjectNodes(instanceId);
+        const collisionCount = Object.keys(collisionChildren).length;
+        if (collisionCount > 0) {
           children.collisionObjects = {
-            label: `${t("threeDee:showCollisionObjects")} (${this.renderables.size})`,
-            children: this.getCollisionObjectNodes(),
+            label: `${t("threeDee:showCollisionObjects")} (${collisionCount})`,
+            children: collisionChildren,
             defaultExpansionState: "collapsed" as const,
             actions: [
               { id: "show-all", type: "action", label: t("threeDee:showAll") },
@@ -664,102 +666,141 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     return entries;
   }
 
-  private getCollisionObjectNodes(): SettingsTreeChildren {
+  private getCollisionObjectNodes(instanceId: string): SettingsTreeChildren {
     const nodes: SettingsTreeChildren = {};
 
+    // Collect IDs from renderables belonging to this layer instance
+    const ids = new Set<string>();
     for (const [objectId, renderable] of this.renderables.entries()) {
-      const userData = renderable.userData;
-      const settings = userData.settings;
-      const collisionObject = userData.collisionObject;
-
-      // Count shapes for display
-      const primitiveCount = collisionObject.primitives.length;
-      const meshCount = collisionObject.meshes.length;
-      const planeCount = collisionObject.planes.length;
-      const totalShapes = primitiveCount + meshCount + planeCount;
-
-      const shapeInfo = [];
-      if (primitiveCount > 0) {
-        shapeInfo.push(`${primitiveCount} primitive${primitiveCount !== 1 ? "s" : ""}`);
+      const path = renderable.userData.settingsPath;
+      if (path?.[1] === instanceId) {
+        ids.add(objectId);
       }
-      if (meshCount > 0) {
-        shapeInfo.push(`${meshCount} mesh${meshCount !== 1 ? "es" : ""}`);
-      }
-      if (planeCount > 0) {
-        shapeInfo.push(`${planeCount} plane${planeCount !== 1 ? "s" : ""}`);
-      }
+    }
 
-      const fields: SettingsTreeFields = {
-        frameId: {
-          label: t("threeDee:frameId"),
-          input: "string",
-          readonly: true,
-          value: userData.frameId,
-        },
-        shapeCount: {
-          label: t("threeDee:shapes"),
-          input: "string",
-          readonly: true,
-          value: totalShapes > 0 ? shapeInfo.join(", ") : t("threeDee:noShapes"),
-        },
-      };
+    // Collect IDs from error tree at ["layers", instanceId, "collisionObjects"]
+    let node = this.renderer.settings.errors.errors as any;
+    for (const segment of ["layers", instanceId, "collisionObjects"]) {
+      node = node?.children?.get?.(segment);
+      if (!node) break;
+    }
+    if (node?.children) {
+      for (const key of node.children.keys()) {
+        ids.add(String(key));
+      }
+    }
 
-      // Add shape type visibility controls if there are multiple types
-      const hasMultipleTypes =
-        [primitiveCount, meshCount, planeCount].filter((count) => count > 0).length > 1;
-      if (hasMultipleTypes) {
+    // Build nodes for each ID, using renderable info when available, otherwise an error-only node
+    for (const objectId of ids) {
+      const renderable = this.renderables.get(objectId);
+      if (renderable && renderable.userData.settingsPath?.[1] === instanceId) {
+        const userData = renderable.userData;
+        const settings = userData.settings;
+        const collisionObject = userData.collisionObject;
+
+        const primitiveCount = collisionObject.primitives.length;
+        const meshCount = collisionObject.meshes.length;
+        const planeCount = collisionObject.planes.length;
+        const totalShapes = primitiveCount + meshCount + planeCount;
+
+        const shapeInfo: string[] = [];
         if (primitiveCount > 0) {
-          fields.showPrimitives = {
-            label: t("threeDee:showPrimitives"),
-            input: "boolean",
-            value: settings.showPrimitives,
-          };
+          shapeInfo.push(`${primitiveCount} primitive${primitiveCount !== 1 ? "s" : ""}`);
         }
         if (meshCount > 0) {
-          fields.showMeshes = {
-            label: t("threeDee:showMeshes"),
-            input: "boolean",
-            value: settings.showMeshes,
-          };
+          shapeInfo.push(`${meshCount} mesh${meshCount !== 1 ? "es" : ""}`);
         }
         if (planeCount > 0) {
-          fields.showPlanes = {
-            label: t("threeDee:showPlanes"),
-            input: "boolean",
-            value: settings.showPlanes,
-          };
+          shapeInfo.push(`${planeCount} plane${planeCount !== 1 ? "s" : ""}`);
         }
+
+        const fields: SettingsTreeFields = {
+          frameId: {
+            label: t("threeDee:frameId"),
+            input: "string",
+            readonly: true,
+            value: userData.frameId,
+          },
+          shapeCount: {
+            label: t("threeDee:shapes"),
+            input: "string",
+            readonly: true,
+            value: totalShapes > 0 ? shapeInfo.join(", ") : t("threeDee:noShapes"),
+          },
+        };
+
+        const hasMultipleTypes =
+          [primitiveCount, meshCount, planeCount].filter((count) => count > 0).length > 1;
+        if (hasMultipleTypes) {
+          if (primitiveCount > 0) {
+            (fields as any).showPrimitives = {
+              label: t("threeDee:showPrimitives"),
+              input: "boolean",
+              value: settings.showPrimitives,
+            };
+          }
+          if (meshCount > 0) {
+            (fields as any).showMeshes = {
+              label: t("threeDee:showMeshes"),
+              input: "boolean",
+              value: settings.showMeshes,
+            };
+          }
+          if (planeCount > 0) {
+            (fields as any).showPlanes = {
+              label: t("threeDee:showPlanes"),
+              input: "boolean",
+              value: settings.showPlanes,
+            };
+          }
+        }
+
+        // Get transform error for this object
+        const transformError = this.renderer.settings.errors.errors.errorAtPath(
+          userData.settingsPath,
+        );
+
+        // Get shape creation errors for this object
+        const shapeErrors = this.renderer.settings.errors.errors.errorAtPath([
+          ...userData.settingsPath,
+          "shapes",
+        ]);
+
+        // Combine transform and shape errors
+        let combinedError = transformError;
+        if (transformError && shapeErrors) {
+          combinedError = `${transformError}; Shape errors: ${shapeErrors}`;
+        } else if (shapeErrors) {
+          combinedError = shapeErrors;
+        }
+
+        const node: SettingsTreeNodeWithActionHandler = {
+          label: objectId,
+          fields,
+          visible: settings.visible,
+          error: combinedError,
+          handler: this.#handleLayerSettingsAction,
+          defaultExpansionState: "collapsed",
+        };
+        nodes[objectId] = node;
+      } else {
+        // Error-only node for an object that failed to render
+        const error = this.renderer.settings.errors.errors.errorAtPath([
+          "layers",
+          instanceId,
+          "collisionObjects",
+          objectId,
+        ]);
+        const node: SettingsTreeNodeWithActionHandler = {
+          label: objectId,
+          fields: {},
+          visible: true,
+          error,
+          handler: this.#handleLayerSettingsAction,
+          defaultExpansionState: "collapsed",
+        };
+        nodes[objectId] = node;
       }
-
-      // Get transform error for this object
-      const transformError = this.renderer.settings.errors.errors.errorAtPath(
-        userData.settingsPath,
-      );
-
-      // Get shape creation errors for this object
-      const shapeErrors = this.renderer.settings.errors.errors.errorAtPath([
-        ...userData.settingsPath,
-        "shapes",
-      ]);
-
-      // Combine errors if both exist
-      let combinedError = transformError;
-      if (transformError && shapeErrors) {
-        combinedError = `${transformError}; Shape errors: ${shapeErrors}`;
-      } else if (shapeErrors) {
-        combinedError = shapeErrors;
-      }
-
-      const node: SettingsTreeNodeWithActionHandler = {
-        label: objectId,
-        fields,
-        visible: settings.visible,
-        error: combinedError,
-        handler: this.#handleLayerSettingsAction,
-        defaultExpansionState: "collapsed",
-      };
-
-      nodes[objectId] = node;
     }
 
     return nodes;
@@ -1021,7 +1062,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const errorMessage = `Failed to process planning scene message from topic "${topic}": ${
         error instanceof Error ? error.message : String(error)
       }`;
-      log.warn(errorMessage);
 
       // Report error to settings tree
       this.renderer.settings.errors.add(
@@ -1037,7 +1077,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Check if service client is available
     if (!this.serviceClient) {
       const errorMessage = t("threeDee:serviceClientUnavailable");
-      log.warn(errorMessage);
 
       // Report error to settings tree
       this.renderer.settings.errors.add(
@@ -1119,7 +1158,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.currentScene = scene;
 
       // Process the initial scene (treat as full scene replacement)
-      this.replaceEntireScene(scene);
+      try {
+        this.replaceEntireScene(scene);
+      } catch (error) { // This try catch is a just-in-case for if replaceEntireScene fails to handle an internal error.
+        log.error(`Failed to replace entire scene:`, error);
+      }
 
       // Mark as successfully fetched
       this.initialSceneFetched = true;
@@ -1420,8 +1463,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
       return true;
     } catch (error) {
-      const errorMessage = `Message validation failed for topic "${topic}": ${error instanceof Error ? error.message : String(error)}`;
-      log.warn(errorMessage);
+      const errorMessage = `Message validation failed in topic "${topic}": ${error instanceof Error ? error.message : String(error)}`;
 
       // Report validation error to settings tree
       this.renderer.settings.errors.add(
@@ -1605,52 +1647,59 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Validate required fields
     if (object.id == undefined) {
       const errorMessage = t("threeDee:collisionObjectMissingId");
-      log.warn(errorMessage);
 
-      // Report error to settings tree (use a generic path since we don't have an ID)
-      this.renderer.settings.errors.add(
-        ["extensions", PlanningSceneExtension.extensionId, "messageProcessing"],
-        MESSAGE_PROCESSING_ERROR,
-        errorMessage,
-      );
+      // Report error to settings tree (use layer path since we don't have an ID)
+      const instId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instId) {
+        this.renderer.settings.errors.add(
+          ["layers", instId, "messageProcessing"],
+          MESSAGE_PROCESSING_ERROR,
+          errorMessage,
+        );
+      }
       return;
     }
 
     if (object.operation == undefined) {
       const errorMessage = `Collision object '${object.id}' missing required 'operation' field, cannot process`;
-      log.warn(errorMessage);
 
-      // Report error to settings tree
-      this.renderer.settings.errors.add(
-        ["extensions", PlanningSceneExtension.extensionId, "collisionObjects", object.id],
-        MESSAGE_PROCESSING_ERROR,
-        errorMessage,
-      );
+      // Report error to settings tree on the layer path
+      const instId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instId) {
+        this.renderer.settings.errors.add(
+          ["layers", instId, "collisionObjects", object.id],
+          MESSAGE_PROCESSING_ERROR,
+          errorMessage,
+        );
+      }
       return;
     }
 
     const objectId = object.id;
     const operation = object.operation;
 
-    // Differential update - only process changed objects for performance optimization
-    if (
-      operation === CollisionObjectOperation.ADD ||
-      operation === CollisionObjectOperation.APPEND ||
-      operation === CollisionObjectOperation.MOVE
-    ) {
-      const fullObject = this.ensureFullCollisionObject(object);
-      if (!this.hasObjectChanged(fullObject)) {
-        // Object hasn't changed, skip processing
-        return;
-      }
-    }
-
     try {
+      // Differential update - only process changed objects for performance optimization
+      if (
+        operation === CollisionObjectOperation.ADD ||
+        operation === CollisionObjectOperation.APPEND ||
+        operation === CollisionObjectOperation.MOVE
+      ) {
+        const fullObject = this.ensureFullCollisionObject(object); // This throws if invalid
+        if (!this.hasObjectChanged(fullObject)) {
+          // Object hasn't changed, skip processing
+          return;
+        }
+      }
+
       // Clear any previous errors for this collision object
-      this.renderer.settings.errors.remove(
-        ["extensions", PlanningSceneExtension.extensionId, "collisionObjects", objectId],
-        MESSAGE_PROCESSING_ERROR,
-      );
+      const errInstanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (errInstanceId) {
+        this.renderer.settings.errors.remove(
+          ["layers", errInstanceId, "collisionObjects", objectId],
+          MESSAGE_PROCESSING_ERROR,
+        );
+      }
 
       switch (operation) {
         case CollisionObjectOperation.ADD: {
@@ -1670,29 +1719,33 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           break;
         }
         default: {
-          const errorMessage = `Unknown collision object operation: ${operation} (${CollisionObjectOperation[operation] ?? "UNKNOWN"}) for object '${objectId}'. Valid operations are: ADD (${CollisionObjectOperation.ADD}), REMOVE (${CollisionObjectOperation.REMOVE}), APPEND (${CollisionObjectOperation.APPEND}), MOVE (${CollisionObjectOperation.MOVE})`;
-          log.warn(errorMessage);
+          const errorMessage = `Unknown collision object operation: ${operation} (${CollisionObjectOperation[operation] ?? "UNKNOWN"}). Valid operations are: ADD (${CollisionObjectOperation.ADD}), REMOVE (${CollisionObjectOperation.REMOVE}), APPEND (${CollisionObjectOperation.APPEND}), MOVE (${CollisionObjectOperation.MOVE})`;
 
           // Report error to settings tree
-          this.renderer.settings.errors.add(
-            ["extensions", PlanningSceneExtension.extensionId, "collisionObjects", objectId],
-            MESSAGE_PROCESSING_ERROR,
-            errorMessage,
-          );
+          const instId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+          if (instId) {
+            this.renderer.settings.errors.add(
+              ["layers", instId, "collisionObjects", objectId],
+              MESSAGE_PROCESSING_ERROR,
+              errorMessage,
+            );
+          }
           break;
         }
       }
     } catch (error) {
       const operationName = CollisionObjectOperation[operation] || `UNKNOWN(${operation})`;
-      const errorMessage = `Failed to apply ${operationName} operation for collision object '${objectId}': ${error instanceof Error ? error.message : String(error)}`;
-      log.warn(errorMessage);
+      const errorMessage = `Failed to apply ${operationName} operation: ${error instanceof Error ? error.message : String(error)}`;
 
       // Report error to settings tree
-      this.renderer.settings.errors.add(
-        ["extensions", PlanningSceneExtension.extensionId, "collisionObjects", objectId],
-        MESSAGE_PROCESSING_ERROR,
-        errorMessage,
-      );
+      const instId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instId) {
+        this.renderer.settings.errors.add(
+          ["layers", instId, "collisionObjects", objectId],
+          MESSAGE_PROCESSING_ERROR,
+          errorMessage,
+        );
+      }
     }
   }
 
@@ -1840,13 +1893,16 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Clean up object hash when removed for performance optimization
     this.objectHashes.delete(objectId);
 
-    // Clear any errors for this object
-    this.renderer.settings.errors.clearPath([
-      "extensions",
-      PlanningSceneExtension.extensionId,
-      "collisionObjects",
-      objectId,
-    ]);
+      // Clear any errors for this object
+      const errInstanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (errInstanceId) {
+        this.renderer.settings.errors.clearPath([
+          "layers",
+          errInstanceId,
+          "collisionObjects",
+          objectId,
+        ]);
+      }
 
     log.info(`Removed collision object '${objectId}'`);
   }
@@ -2373,7 +2429,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const existingPlanningSceneId = this.findFirstPlanningSceneInstanceId();
     if (existingPlanningSceneId) {
       const errorMessage = t("threeDee:onlyOnePlanningSceneAllowed");
-      log.warn(errorMessage);
 
       // Display error message to user if available
       if (this.renderer.displayTemporaryError) {

@@ -133,9 +133,6 @@ const createMockCollisionObjectRenderable = (frameId: string): CollisionObjectRe
       settings: {
         visible: true,
         opacity: 1,
-        showPrimitives: true,
-        showMeshes: true,
-        showPlanes: true,
       },
       collisionObject: {
         header: { frame_id: "test", stamp: { sec: 0, nsec: 0 } },

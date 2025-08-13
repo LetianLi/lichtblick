@@ -211,7 +211,7 @@ export class SceneExtension<
       // renderable is not visible, clear any layer errors and skip its per-frame update logic
       renderable.visible = renderable.userData.settings.visible;
       if (!renderable.visible) {
-        this.renderer.settings.errors.clearPath(path);
+        // Do not clear errors when hidden; keep them for when it is shown again
         continue;
       }
 

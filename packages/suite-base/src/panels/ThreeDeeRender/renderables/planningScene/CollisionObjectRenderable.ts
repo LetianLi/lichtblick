@@ -32,13 +32,11 @@ import { RenderableCylinder } from "../markers/RenderableCylinder";
 import { RenderablePlane } from "../markers/RenderablePlane";
 import { RenderableSphere } from "../markers/RenderableSphere";
 import { RenderableTriangleList } from "../markers/RenderableTriangleList";
+import Logger from "@lichtblick/log"; // TODO: Remove this
 
 export type CollisionObjectSettings = BaseSettings & {
   color?: string;
   opacity: number;
-  showPrimitives: boolean;
-  showMeshes: boolean;
-  showPlanes: boolean;
 };
 
 export type CollisionObjectUserData = BaseUserData & {
@@ -46,6 +44,8 @@ export type CollisionObjectUserData = BaseUserData & {
   collisionObject: CollisionObject;
   shapes: Map<string, Renderable>;
 };
+
+const log = Logger.getLogger(__filename);
 
 export class CollisionObjectRenderable extends Renderable<CollisionObjectUserData> {
   private shapes = new Map<string, Renderable>();
@@ -85,27 +85,26 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
     this.clearShapes();
 
     // 3. Create new shapes as children with LOCAL poses
-    if (this.userData.settings.showPrimitives) {
-      this.createPrimitiveShapes(object.primitives, object.primitive_poses);
-    }
-    if (this.userData.settings.showMeshes) {
-      this.createMeshShapes(object.meshes, object.mesh_poses);
-    }
-    if (this.userData.settings.showPlanes) {
-      this.createPlaneShapes(object.planes, object.plane_poses);
-    }
+    this.createPrimitiveShapes(object.primitives, object.primitive_poses);
+    this.createMeshShapes(object.meshes, object.mesh_poses);
+    this.createPlaneShapes(object.planes, object.plane_poses);
+
+    // After attempting to create all shapes, update the parent-level summary
+    this.#updateShapeFailureSummary();
   }
 
   // Clear all child shapes and dispose resources
   private clearShapes(): void {
-    for (const shape of this.shapes.values()) {
+    for (const [key, shape] of this.shapes.entries()) {
       this.remove(shape);
       shape.dispose();
+      // Clear per-shape errors
+      this.renderer.settings.errors.clearPath([...this.userData.settingsPath, key]);
     }
     this.shapes.clear();
+    this.userData.shapes.clear?.();
 
-    // Clear any shape creation errors when clearing shapes
-    this.renderer.settings.errors.clearPath([...this.userData.settingsPath, "shapes"]);
+    // Note: per-shape errors are cleared above; no group node is used
   }
 
   // Create primitive shapes with LOCAL poses relative to this container
@@ -138,7 +137,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 3) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Insufficient dimensions: Expected ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createBoxShape(dimensions);
@@ -148,7 +147,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 1) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Insufficient dimensions: Expected ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createSphereShape(dimensions);
@@ -158,7 +157,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 2) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Insufficient dimensions: Expected ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createCylinderShape(dimensions);
@@ -168,7 +167,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
             if (dimensions.length < 2) {
               const expectedDims = getSolidPrimitiveDimensionNames(primitive.type);
               throw new Error(
-                `Requires ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
+                `Insufficient dimensions: Expected ${expectedDims.length} dimension${expectedDims.length > 1 ? "s" : ""}[${expectedDims.join(", ")}], got ${dimensions.length}`,
               );
             }
             shape = this.createConeShape(dimensions);
@@ -210,20 +209,45 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           pose.orientation.w,
         );
 
+        // Assign per-shape settings path and persisted visibility
+        const shapeKey = `primitive_${i}`;
+        shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
+        const instanceId = this.userData.settingsPath?.[1];
+        const objectId = this.userData.collisionObject.id;
+        const layerConfig = instanceId
+          ? (this.renderer.config.layers[instanceId] as any)
+          : undefined;
+        const savedVisible = layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
+        const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
+        if (shape.userData.settings) {
+          shape.userData.settings.visible = Boolean(visible);
+        }
+        shape.visible = Boolean(visible);
+
         this.add(shape); // Add as child
-        this.shapes.set(`primitive_${i}`, shape);
+        this.shapes.set(shapeKey, shape);
+        this.userData.shapes.set(shapeKey, shape);
       } catch (error) {
         const primitiveTypeName = primitive
           ? SolidPrimitiveType[primitive.type] || `UNKNOWN`
           : "UNDEFINED";
-        const errorMessage = `Failed to create primitive[${i}] (${primitiveTypeName}): ${error instanceof Error ? error.message : String(error)}`;
+        const errorMessage = `Failed to create primitive (${primitiveTypeName}): ${
+          error instanceof Error ? error.message : String(error)
+        }`;
 
-        // Report shape creation error to settings tree
+        // Report shape creation error to settings tree at per-shape path
         this.renderer.settings.errors.add(
-          [...this.userData.settingsPath, "shapes"],
+          [...this.userData.settingsPath, `primitive_${i}`],
           `SHAPE_CREATION_ERROR_${i}`,
           errorMessage,
         );
+        // Bubble a concise error to the collision object row as well
+        this.renderer.settings.errors.add(
+          this.userData.settingsPath,
+          "SHAPE_ERRORS",
+          this.#shapeFailureMessage(),
+        );
+        this.#updateShapeFailureSummary();
       }
     }
   }
@@ -330,14 +354,33 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         }
 
         // Lazy loading for mesh resources to improve performance
+        // TODO: Remove loadMeshResource since it is not used.
         if (this.extension?.loadMeshResource) {
+          log.warn("Loading mesh resource. It is available", this.extension.loadMeshResource); // TODO: Remove this
           // Use lazy loading for mesh resources
           void this.extension
             .loadMeshResource(mesh)
             .then((_geometry) => {
               // The geometry is loaded and cached by the extension, but we still create the shape
               // using the standard method since RenderableTriangleList handles its own geometry
+              log.warn("Created skipped geometry", _geometry); // TODO: Remove this
               const shape = this.createTriangleListFromMesh(mesh);
+
+              // Assign per-shape settings path and persisted visibility
+              const shapeKey = `mesh_${i}`;
+              shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
+              const instanceId = this.userData.settingsPath?.[1];
+              const objectId = this.userData.collisionObject.id;
+              const layerConfig = instanceId
+                ? (this.renderer.config.layers[instanceId] as any)
+                : undefined;
+              const savedVisible =
+                layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
+              const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
+              if (shape.userData.settings) {
+                shape.userData.settings.visible = Boolean(visible);
+              }
+              shape.visible = Boolean(visible);
 
               // Set LOCAL position/rotation relative to this container
               shape.position.set(pose.position.x, pose.position.y, pose.position.z);
@@ -349,21 +392,48 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
               );
 
               this.add(shape);
-              this.shapes.set(`mesh_${i}`, shape);
+              this.shapes.set(shapeKey, shape);
+              this.userData.shapes.set(shapeKey, shape);
             })
             .catch((error: unknown) => {
-              const errorMessage = `Failed to load mesh resource ${i} in collision object '${this.userData.collisionObject.id}': ${error instanceof Error ? error.message : String(error)}`;
+              const errorMessage = `Failed to load mesh resource: ${
+                error instanceof Error ? error.message : String(error)
+              }`;
 
-              // Report mesh loading error to settings tree
+              // Report mesh loading error to settings tree at per-shape path
               this.renderer.settings.errors.add(
-                [...this.userData.settingsPath, "shapes"],
+                [...this.userData.settingsPath, `mesh_${i}`],
                 `MESH_LOADING_ERROR_${i}`,
                 errorMessage,
               );
+              // Bubble concise error to collision object row
+              this.renderer.settings.errors.add(
+                this.userData.settingsPath,
+                "SHAPE_ERRORS",
+                this.#shapeFailureMessage(),
+              );
+              this.#updateShapeFailureSummary();
             });
         } else {
+          log.warn("No mesh resource loader available"); // TODO: Remove this
           // Fallback to synchronous creation
           const shape = this.createTriangleListFromMesh(mesh);
+
+          // Assign per-shape settings path and persisted visibility
+          const shapeKey = `mesh_${i}`;
+          shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
+          const instanceId = this.userData.settingsPath?.[1];
+          const objectId = this.userData.collisionObject.id;
+          const layerConfig = instanceId
+            ? (this.renderer.config.layers[instanceId] as any)
+            : undefined;
+          const savedVisible =
+            layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
+          const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
+          if (shape.userData.settings) {
+            shape.userData.settings.visible = Boolean(visible);
+          }
+          shape.visible = Boolean(visible);
 
           // Set LOCAL position/rotation relative to this container
           shape.position.set(pose.position.x, pose.position.y, pose.position.z);
@@ -375,17 +445,27 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           );
 
           this.add(shape);
-          this.shapes.set(`mesh_${i}`, shape);
+          this.shapes.set(shapeKey, shape);
+          this.userData.shapes.set(shapeKey, shape);
         }
       } catch (error) {
-        const errorMessage = `Failed to create mesh shape ${i} in collision object '${this.userData.collisionObject.id}': ${error instanceof Error ? error.message : String(error)}`;
+          const errorMessage = `Failed to create mesh: ${
+            error instanceof Error ? error.message : String(error)
+          }`;
 
-        // Report mesh loading error to settings tree
+        // Report mesh loading error to settings tree at per-shape path
         this.renderer.settings.errors.add(
-          [...this.userData.settingsPath, "shapes"],
+          [...this.userData.settingsPath, `mesh_${i}`],
           `MESH_LOADING_ERROR_${i}`,
           errorMessage,
         );
+        // Bubble concise error to collision object row
+        this.renderer.settings.errors.add(
+          this.userData.settingsPath,
+          "SHAPE_ERRORS",
+          this.#shapeFailureMessage(),
+        );
+        this.#updateShapeFailureSummary();
       }
     }
   }
@@ -473,18 +553,89 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           pose.position.z + offsetLocal.z,
         );
 
-        this.add(shape);
-        this.shapes.set(`plane_${i}`, shape);
-      } catch (error) {
-        const errorMessage = `Failed to create plane[${i}]: ${error instanceof Error ? error.message : String(error)}`;
+        // Assign per-shape settings path and persisted visibility
+        const shapeKey = `plane_${i}`;
+        shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
+        const instanceId = this.userData.settingsPath?.[1];
+        const objectId = this.userData.collisionObject.id;
+        const layerConfig = instanceId
+          ? (this.renderer.config.layers[instanceId] as any)
+          : undefined;
+        const savedVisible = layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
+        const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
+        if (shape.userData.settings) {
+          shape.userData.settings.visible = Boolean(visible);
+        }
+        shape.visible = Boolean(visible);
 
-        // Report plane creation error to settings tree
+        this.add(shape);
+        this.shapes.set(shapeKey, shape);
+        this.userData.shapes.set(shapeKey, shape);
+      } catch (error) {
+        const errorMessage = `Failed to create plane: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
+
+        // Report plane creation error to settings tree at per-shape path
         this.renderer.settings.errors.add(
-          [...this.userData.settingsPath, "shapes"],
+          [...this.userData.settingsPath, `plane_${i}`],
           `SHAPE_CREATION_ERROR_PLANE_${i}`,
           errorMessage,
         );
+        // Bubble concise error to collision object row
+        this.renderer.settings.errors.add(
+          this.userData.settingsPath,
+          "SHAPE_ERRORS",
+          this.#shapeFailureMessage(),
+        );
+        this.#updateShapeFailureSummary();
       }
+    }
+  }
+
+  // Build the summary message for parent row
+  #shapeFailureMessage(): string {
+    const obj = this.userData.collisionObject;
+    const total = obj.primitives.length + obj.meshes.length + obj.planes.length;
+    const failed = this.#countFailedShapes();
+    return `${failed} of ${total} shapes failed to render`;
+  }
+
+  #countFailedShapes(): number {
+    const base = this.userData.settingsPath;
+    const obj = this.userData.collisionObject;
+    let failed = 0;
+    for (let i = 0; i < obj.primitives.length; i++) {
+      if (this.renderer.settings.errors.errors.errorAtPath([...base, `primitive_${i}`]) != undefined) {
+        failed++;
+      }
+    }
+    for (let i = 0; i < obj.meshes.length; i++) {
+      if (this.renderer.settings.errors.errors.errorAtPath([...base, `mesh_${i}`]) != undefined) {
+        failed++;
+      }
+    }
+    for (let i = 0; i < obj.planes.length; i++) {
+      if (this.renderer.settings.errors.errors.errorAtPath([...base, `plane_${i}`]) != undefined) {
+        failed++;
+      }
+    }
+    return failed;
+  }
+
+  #updateShapeFailureSummary(): void {
+    const failed = this.#countFailedShapes();
+    const obj = this.userData.collisionObject;
+    const total = obj.primitives.length + obj.meshes.length + obj.planes.length;
+    if (failed > 0) {
+      this.renderer.settings.errors.add(
+        this.userData.settingsPath,
+        "SHAPE_ERRORS",
+        `${failed} of ${total} shapes failed to render`,
+      );
+    } else {
+      // If no failures remain, clear summary (does not touch per-shape errors)
+      this.renderer.settings.errors.remove(this.userData.settingsPath, "SHAPE_ERRORS");
     }
   }
 

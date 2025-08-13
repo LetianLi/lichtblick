@@ -32,7 +32,6 @@ import { RenderableCylinder } from "../markers/RenderableCylinder";
 import { RenderablePlane } from "../markers/RenderablePlane";
 import { RenderableSphere } from "../markers/RenderableSphere";
 import { RenderableTriangleList } from "../markers/RenderableTriangleList";
-import Logger from "@lichtblick/log"; // TODO: Remove this
 
 export type CollisionObjectSettings = BaseSettings & {
   color?: string;
@@ -45,28 +44,12 @@ export type CollisionObjectUserData = BaseUserData & {
   shapes: Map<string, Renderable>;
 };
 
-const log = Logger.getLogger(__filename);
-
 export class CollisionObjectRenderable extends Renderable<CollisionObjectUserData> {
   private shapes = new Map<string, Renderable>();
-
-  // Performance optimization: Reference to extension for performance optimizations
-  private extension?: {
-    loadMeshResource: (meshData: Mesh) => Promise<THREE.BufferGeometry>;
-    getSharedMaterial: (color: string, opacity: number) => THREE.MeshStandardMaterial;
-  };
 
   public constructor(name: string, renderer: IRenderer, userData: CollisionObjectUserData) {
     super(name, renderer, userData);
     // Container acts as a group - doesn't render anything itself
-  }
-
-  // Set reference to extension for performance optimizations
-  public setExtension(extension: {
-    loadMeshResource: (meshData: Mesh) => Promise<THREE.BufferGeometry>;
-    getSharedMaterial: (color: string, opacity: number) => THREE.MeshStandardMaterial;
-  }): void {
-    this.extension = extension;
   }
 
   public override dispose(): void {
@@ -74,7 +57,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
     super.dispose();
   }
 
-  // Update collision object with new data (Compositional Hierarchy pattern)
+  // Update collision object with new data
   public update(object: CollisionObject): void {
     // 1. Apply the main pose of the CollisionObject to this container's userData
     this.userData.pose = object.pose;
@@ -353,101 +336,37 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
           );
         }
 
-        // Lazy loading for mesh resources to improve performance
-        // TODO: Remove loadMeshResource since it is not used.
-        if (this.extension?.loadMeshResource) {
-          log.warn("Loading mesh resource. It is available", this.extension.loadMeshResource); // TODO: Remove this
-          // Use lazy loading for mesh resources
-          void this.extension
-            .loadMeshResource(mesh)
-            .then((_geometry) => {
-              // The geometry is loaded and cached by the extension, but we still create the shape
-              // using the standard method since RenderableTriangleList handles its own geometry
-              log.warn("Created skipped geometry", _geometry); // TODO: Remove this
-              const shape = this.createTriangleListFromMesh(mesh);
+        // Use triangle list marker rendering for meshes
+        const shape = this.createTriangleListFromMesh(mesh);
 
-              // Assign per-shape settings path and persisted visibility
-              const shapeKey = `mesh_${i}`;
-              shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
-              const instanceId = this.userData.settingsPath?.[1];
-              const objectId = this.userData.collisionObject.id;
-              const layerConfig = instanceId
-                ? (this.renderer.config.layers[instanceId] as any)
-                : undefined;
-              const savedVisible =
-                layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
-              const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
-              if (shape.userData.settings) {
-                shape.userData.settings.visible = Boolean(visible);
-              }
-              shape.visible = Boolean(visible);
-
-              // Set LOCAL position/rotation relative to this container
-              shape.position.set(pose.position.x, pose.position.y, pose.position.z);
-              shape.quaternion.set(
-                pose.orientation.x,
-                pose.orientation.y,
-                pose.orientation.z,
-                pose.orientation.w,
-              );
-
-              this.add(shape);
-              this.shapes.set(shapeKey, shape);
-              this.userData.shapes.set(shapeKey, shape);
-            })
-            .catch((error: unknown) => {
-              const errorMessage = `Failed to load mesh resource: ${
-                error instanceof Error ? error.message : String(error)
-              }`;
-
-              // Report mesh loading error to settings tree at per-shape path
-              this.renderer.settings.errors.add(
-                [...this.userData.settingsPath, `mesh_${i}`],
-                `MESH_LOADING_ERROR_${i}`,
-                errorMessage,
-              );
-              // Bubble concise error to collision object row
-              this.renderer.settings.errors.add(
-                this.userData.settingsPath,
-                "SHAPE_ERRORS",
-                this.#shapeFailureMessage(),
-              );
-              this.#updateShapeFailureSummary();
-            });
-        } else {
-          log.warn("No mesh resource loader available"); // TODO: Remove this
-          // Fallback to synchronous creation
-          const shape = this.createTriangleListFromMesh(mesh);
-
-          // Assign per-shape settings path and persisted visibility
-          const shapeKey = `mesh_${i}`;
-          shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
-          const instanceId = this.userData.settingsPath?.[1];
-          const objectId = this.userData.collisionObject.id;
-          const layerConfig = instanceId
-            ? (this.renderer.config.layers[instanceId] as any)
-            : undefined;
-          const savedVisible =
-            layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
-          const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
-          if (shape.userData.settings) {
-            shape.userData.settings.visible = Boolean(visible);
-          }
-          shape.visible = Boolean(visible);
-
-          // Set LOCAL position/rotation relative to this container
-          shape.position.set(pose.position.x, pose.position.y, pose.position.z);
-          shape.quaternion.set(
-            pose.orientation.x,
-            pose.orientation.y,
-            pose.orientation.z,
-            pose.orientation.w,
-          );
-
-          this.add(shape);
-          this.shapes.set(shapeKey, shape);
-          this.userData.shapes.set(shapeKey, shape);
+        // Assign per-shape settings path and persisted visibility
+        const shapeKey = `mesh_${i}`;
+        shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
+        const instanceId = this.userData.settingsPath?.[1];
+        const objectId = this.userData.collisionObject.id;
+        const layerConfig = instanceId
+          ? (this.renderer.config.layers[instanceId] as any)
+          : undefined;
+        const savedVisible =
+          layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
+        const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
+        if (shape.userData.settings) {
+          shape.userData.settings.visible = Boolean(visible);
         }
+        shape.visible = Boolean(visible);
+
+        // Set LOCAL position/rotation relative to this container
+        shape.position.set(pose.position.x, pose.position.y, pose.position.z);
+        shape.quaternion.set(
+          pose.orientation.x,
+          pose.orientation.y,
+          pose.orientation.z,
+          pose.orientation.w,
+        );
+
+        this.add(shape);
+        this.shapes.set(shapeKey, shape);
+        this.userData.shapes.set(shapeKey, shape);
       } catch (error) {
           const errorMessage = `Failed to create mesh: ${
             error instanceof Error ? error.message : String(error)

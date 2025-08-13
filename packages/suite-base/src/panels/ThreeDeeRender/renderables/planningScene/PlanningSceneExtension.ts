@@ -121,15 +121,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Performance optimization: Track object hashes for differential updates
   private objectHashes = new Map<string, string>();
 
-  // Performance optimization: Material sharing cache for identical colors/transparency
-  private materialCache = new Map<string, THREE.MeshStandardMaterial>();
-
-  // Performance optimization: Lazy loading cache for mesh resources
-  private meshResourceCache = new Map<string, Promise<THREE.BufferGeometry>>();
-
-  // Performance monitoring: Track visible object count for optimization insights
-  private visibleObjectCount = 0;
-
   // Helper method to find the instance ID for a given topic
   private findInstanceIdForTopic(topic: string): string | undefined {
     // First try to find a layer with matching topic
@@ -333,168 +324,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     return false;
   }
 
-  // Performance optimization: Get or create shared material for identical colors/transparency
-  public getSharedMaterial(color: string, opacity: number): THREE.MeshStandardMaterial {
-    // Create a cache key based on color and opacity
-    const key = `${color}_${Math.round(opacity * 1000)}`;
-
-    let material = this.materialCache.get(key);
-    if (!material) {
-      // Parse color string to RGBA
-      const tempColor = { r: 0, g: 0, b: 0, a: opacity };
-      stringToRgba(tempColor, color);
-      tempColor.a = opacity;
-
-      // Create new material
-      material = new THREE.MeshStandardMaterial({
-        color: new THREE.Color(tempColor.r, tempColor.g, tempColor.b).convertSRGBToLinear(),
-        metalness: 0,
-        roughness: 1,
-        dithering: true,
-        opacity: tempColor.a,
-        transparent: tempColor.a < 1,
-        depthWrite: tempColor.a === 1,
-      });
-
-      this.materialCache.set(key, material);
-    }
-
-    return material;
-  }
-
-  // Get shared geometry for mesh data to improve performance by reusing identical meshes
-  public getSharedMeshGeometry(meshData: Mesh): string {
-    // Create a cache key based on mesh structure for sharing identical meshes
-    if (meshData.vertices.length === 0 || meshData.triangles.length === 0) {
-      return `mesh_invalid_${crypto.randomUUID()}`; // Return unique hash for empty meshes
-    }
-
-    const vertexCount = meshData.vertices.length;
-    const triangleCount = meshData.triangles.length;
-
-    // Create a simple hash of the mesh structure
-    let structureHash = 0;
-    for (let i = 0; i < Math.min(vertexCount, 10); i++) {
-      const v = meshData.vertices[i];
-      if (v) {
-        structureHash += v.x * 1000 + v.y * 100 + v.z * 10;
-      }
-    }
-
-    return `mesh_${vertexCount}_${triangleCount}_${Math.round(structureHash)}`;
-  }
-
-  // Lazy loading for mesh resources to improve performance by deferring expensive operations
-  public async loadMeshResource(meshData: Mesh): Promise<THREE.BufferGeometry> {
-    // Use the shared mesh geometry key for better cache efficiency
-    const meshKey = this.getSharedMeshGeometry(meshData);
-
-    let geometryPromise = this.meshResourceCache.get(meshKey);
-    if (!geometryPromise) {
-      geometryPromise = this.createMeshGeometry(meshData);
-      this.meshResourceCache.set(meshKey, geometryPromise);
-
-      // Performance optimization: Clean up failed promises from cache
-      geometryPromise.catch(() => {
-        this.meshResourceCache.delete(meshKey);
-      });
-    }
-
-    return await geometryPromise;
-  }
-
-  // Helper method to create mesh geometry asynchronously with better error handling
-  private async createMeshGeometry(meshData: Mesh): Promise<THREE.BufferGeometry> {
-    return await new Promise((resolve, reject) => {
-      // Use requestAnimationFrame to avoid blocking the main thread for large meshes
-      requestAnimationFrame(() => {
-        try {
-          const geometry = new THREE.BufferGeometry();
-
-          // Validate mesh data
-          if (meshData.vertices.length === 0) {
-            throw new Error(t("threeDee:meshNoVertices"));
-          }
-          if (meshData.triangles.length === 0) {
-            throw new Error(t("threeDee:meshNoTriangles"));
-          }
-
-          // Convert mesh data to THREE.js format
-          const vertices: number[] = [];
-          const indices: number[] = [];
-
-          // Add vertices with validation
-          for (const vertex of meshData.vertices) {
-            if (
-              !Number.isFinite(vertex.x) ||
-              !Number.isFinite(vertex.y) ||
-              !Number.isFinite(vertex.z)
-            ) {
-              throw new Error(t("threeDee:invalidVertexData"));
-            }
-            vertices.push(vertex.x, vertex.y, vertex.z);
-          }
-
-          // Add triangle indices with validation
-          for (let j = 0; j < meshData.triangles.length; j++) {
-            const triangle = meshData.triangles[j];
-            if (triangle?.vertex_indices == undefined) {
-              throw new Error(`triangle[${j}] missing vertex_indices`);
-            }
-
-            // Accept both regular arrays and typed arrays (like Uint32Array from ROS)
-            const vertexIndices = triangle.vertex_indices;
-            const isArrayLike =
-              Array.isArray(vertexIndices) ||
-              (typeof vertexIndices === "object" &&
-                "length" in vertexIndices &&
-                typeof (vertexIndices as ArrayLike<unknown>).length === "number");
-
-            if (!isArrayLike) {
-              throw new Error(
-                `triangle[${j}] vertex_indices must be array-like, got ${typeof triangle.vertex_indices}`,
-              );
-            }
-            if ((vertexIndices as ArrayLike<unknown>).length !== 3) {
-              throw new Error(
-                `triangle[${j}] expected 3 vertex indices, got ${(vertexIndices as ArrayLike<unknown>).length}`,
-              );
-            }
-            for (const index of triangle.vertex_indices) {
-              if (!Number.isInteger(index) || index < 0 || index >= meshData.vertices.length) {
-                throw new Error(
-                  `triangle[${j}] invalid vertex index ${index} (0-${meshData.vertices.length - 1})`,
-                );
-              }
-            }
-            indices.push(...triangle.vertex_indices);
-          }
-
-          geometry.setAttribute("position", new THREE.Float32BufferAttribute(vertices, 3));
-          geometry.setIndex(indices);
-          geometry.computeVertexNormals();
-          geometry.computeBoundingSphere();
-
-          resolve(geometry);
-        } catch (error) {
-          reject(error instanceof Error ? error : new Error(String(error)));
-        }
-      });
-    });
-  }
-
   public override dispose(): void {
     // Clear performance optimization caches
     this.objectHashes.clear();
-
-    // Dispose shared materials
-    for (const material of this.materialCache.values()) {
-      material.dispose();
-    }
-    this.materialCache.clear();
-
-    // Clear mesh resource cache
-    this.meshResourceCache.clear();
 
     // Clear any pending service calls by resetting the service client
     this.serviceClient = undefined;
@@ -988,9 +820,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Call the base class implementation to handle standard visibility and transforms
     super.startFrame(currentTime, renderFrameId, fixedFrameId);
 
-    // Add PlanningScene-specific logic after base processing
-    this.visibleObjectCount = 0;
-
     // Apply additional PlanningScene-specific visibility logic
     for (const collisionObject of this.renderables.values()) {
       // Skip if already invisible from base class processing
@@ -1017,8 +846,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         collisionObject.visible = false;
         continue;
       }
-
-      this.visibleObjectCount++;
     }
   }
 
@@ -1835,12 +1662,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Create the collision object renderable
       const renderable = new CollisionObjectRenderable(objectId, this.renderer, userData);
 
-      // Performance optimization: Set extension reference for performance optimizations
-      renderable.setExtension({
-        loadMeshResource: this.loadMeshResource.bind(this),
-        getSharedMaterial: this.getSharedMaterial.bind(this),
-      });
-
       // Update the renderable with the collision object data
       renderable.update(fullObject);
 
@@ -2133,27 +1954,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Public method to check if initial scene has been fetched
   public hasInitialScene(): boolean {
     return this.initialSceneFetched && this.currentScene != undefined;
-  }
-
-  // Get performance statistics for monitoring optimization effectiveness
-  public getPerformanceStats(): {
-    totalObjects: number;
-    visibleObjects: number;
-    hiddenObjects: number;
-    cachedMaterials: number;
-    cachedMeshes: number;
-    objectHashes: number;
-  } {
-    const hiddenObjects = this.renderables.size - this.visibleObjectCount;
-
-    return {
-      totalObjects: this.renderables.size,
-      visibleObjects: this.visibleObjectCount,
-      hiddenObjects,
-      cachedMaterials: this.materialCache.size,
-      cachedMeshes: this.meshResourceCache.size,
-      objectHashes: this.objectHashes.size,
-    };
   }
 
   // Helper function to ensure a partial pose becomes a full pose

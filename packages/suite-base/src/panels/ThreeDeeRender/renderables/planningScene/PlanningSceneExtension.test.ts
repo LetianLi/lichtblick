@@ -4,7 +4,6 @@
 // SPDX-License-Identifier: MPL-2.0
 
 import { waitFor } from "@testing-library/react";
-import * as THREE from "three";
 
 import { CollisionObjectRenderable } from "./CollisionObjectRenderable";
 import { PlanningSceneExtension } from "./PlanningSceneExtension";
@@ -209,29 +208,6 @@ describe("PlanningSceneExtension", () => {
     it("tracks renderables correctly", () => {
       expect(extension.renderables).toBeDefined();
       expect(extension.renderables.size).toBe(0);
-    });
-  });
-
-  describe("Performance Monitoring", () => {
-    it("provides performance statistics", () => {
-      const stats = extension.getPerformanceStats();
-      expect(stats).toMatchObject({
-        totalObjects: 0,
-        visibleObjects: 0,
-        hiddenObjects: 0,
-        cachedMaterials: 0,
-        cachedMeshes: 0,
-        objectHashes: 0,
-      });
-    });
-
-    it("supports material caching", () => {
-      const material = extension.getSharedMaterial("#ffffff", 1.0);
-      expect(material).toBeInstanceOf(THREE.MeshStandardMaterial);
-
-      // Should return same instance for same parameters
-      const material2 = extension.getSharedMaterial("#ffffff", 1.0);
-      expect(material2).toBe(material);
     });
   });
 

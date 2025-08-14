@@ -45,8 +45,6 @@ export type CollisionObjectUserData = BaseUserData & {
 };
 
 export class CollisionObjectRenderable extends Renderable<CollisionObjectUserData> {
-  private shapes = new Map<string, Renderable>();
-
   public constructor(name: string, renderer: IRenderer, userData: CollisionObjectUserData) {
     super(name, renderer, userData);
     // Container acts as a group - doesn't render anything itself
@@ -78,14 +76,13 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
 
   // Clear all child shapes and dispose resources
   private clearShapes(): void {
-    for (const [key, shape] of this.shapes.entries()) {
+    for (const [key, shape] of this.userData.shapes.entries()) {
       this.remove(shape);
       shape.dispose();
       // Clear per-shape errors
       this.renderer.settings.errors.clearPath([...this.userData.settingsPath, key]);
     }
-    this.shapes.clear();
-    this.userData.shapes.clear?.();
+    this.userData.shapes.clear();
 
     // Note: per-shape errors are cleared above; no group node is used
   }
@@ -208,7 +205,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         shape.visible = Boolean(visible);
 
         this.add(shape); // Add as child
-        this.shapes.set(shapeKey, shape);
         this.userData.shapes.set(shapeKey, shape);
       } catch (error) {
         const primitiveTypeName = primitive
@@ -365,7 +361,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         );
 
         this.add(shape);
-        this.shapes.set(shapeKey, shape);
         this.userData.shapes.set(shapeKey, shape);
       } catch (error) {
           const errorMessage = `Failed to create mesh: ${
@@ -488,7 +483,6 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         shape.visible = Boolean(visible);
 
         this.add(shape);
-        this.shapes.set(shapeKey, shape);
         this.userData.shapes.set(shapeKey, shape);
       } catch (error) {
         const errorMessage = `Failed to create plane: ${

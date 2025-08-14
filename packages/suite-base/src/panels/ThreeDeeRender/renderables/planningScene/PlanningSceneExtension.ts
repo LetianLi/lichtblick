@@ -107,7 +107,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   private serviceClient?: (service: string, request: unknown) => Promise<unknown>;
   private initialSceneFetched = false;
   private fetchingInitialScene = false;
-  private pendingServiceCall?: Promise<unknown>; // Track pending service calls for cleanup
 
   // Track current message context for creating renderables
   private topic = DEFAULT_PLANNING_SCENE_TOPIC;
@@ -331,9 +330,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Clear any pending service calls by resetting the service client
     this.serviceClient = undefined;
 
-    // Clear pending service call reference (the promise will still resolve/reject but we won't handle it)
-    this.pendingServiceCall = undefined;
-
     // Clear current scene data
     this.currentScene = undefined;
 
@@ -554,12 +550,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           },
         };
 
-        // Get transform error for this object
-        const transformError = this.renderer.settings.errors.errors.errorAtPath(
-          userData.settingsPath,
-        );
-        // Include bubbled child errors on the parent collision object row
-        const bubbledShapeErrors = this.renderer.settings.errors.errors.errorAtPath(
+        // Get errors for this object
+        const errors = this.renderer.settings.errors.errors.errorAtPath(
           userData.settingsPath,
         );
 
@@ -567,7 +559,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           label: objectId,
           fields,
           visible: settings.visible,
-          error: transformError || bubbledShapeErrors,
+          error: errors,
           handler: this.#handleLayerSettingsAction,
           defaultExpansionState: "collapsed",
           children: (() => {
@@ -954,9 +946,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
       // Call the service directly
 
-      this.pendingServiceCall = this.serviceClient(DEFAULT_PLANNING_SCENE_SERVICE, request);
+      const serviceCallPromise = this.serviceClient(DEFAULT_PLANNING_SCENE_SERVICE, request);
 
-      const response = (await this.pendingServiceCall) as GetPlanningSceneResponse | undefined;
+      const response = (await serviceCallPromise) as GetPlanningSceneResponse | undefined;
 
       // Validate the response structure with detailed error messages
       if (response == undefined) {
@@ -1040,7 +1032,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.initialSceneFetched = false;
     } finally {
       this.fetchingInitialScene = false;
-      this.pendingServiceCall = undefined; // Clear the pending service call reference
 
       // Update settings tree to reflect the new status
       this.updateSettingsTree();

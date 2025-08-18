@@ -587,7 +587,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
                   key,
                 ]),
                 defaultExpansionState: "collapsed",
-                children: {"dummy": undefined}, // Force dropdown arrow
+                children: { "dummy": undefined }, // Force dropdown arrow
               };
             }
             // Meshes
@@ -605,7 +605,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
                   key,
                 ]),
                 defaultExpansionState: "collapsed",
-                children: {"dummy": undefined}, // Force dropdown arrow
+                children: { "dummy": undefined }, // Force dropdown arrow
               };
             }
             // Planes
@@ -623,7 +623,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
                   key,
                 ]),
                 defaultExpansionState: "collapsed",
-                children: {"dummy": undefined}, // Force dropdown arrow
+                children: { "dummy": undefined }, // Force dropdown arrow
               };
             }
             return children;
@@ -650,7 +650,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           error,
           handler: this.#handleLayerSettingsAction,
           defaultExpansionState: "collapsed",
-          children: {"dummy": undefined}, // Force dropdown arrow
+          children: { "dummy": undefined }, // Force dropdown arrow
         };
         nodes[objectId] = node;
       }
@@ -793,14 +793,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     fixedFrameId: AnyFrameId,
   ): void {
     // Fetch initial scene if we haven't done so yet and we're not already fetching
-    // Only fetch if there are visible planning scene layers configured
-    const hasVisibleLayers = Object.values(this.renderer.config.layers).some(
-      (layer) => layer?.layerId === LAYER_ID && layer.visible === true,
-    );
-
-    if (!this.initialSceneFetched && !this.fetchingInitialScene && hasVisibleLayers) {
+    if (!this.initialSceneFetched && !this.fetchingInitialScene && this.visible) {
       void this.fetchInitialScene();
-    } else if (!this.initialSceneFetched && !this.fetchingInitialScene && !hasVisibleLayers) {
+    } else if (!this.initialSceneFetched && !this.fetchingInitialScene && !this.visible) {
       // Clear any existing renderables if there are no visible layers
       if (this.renderables.size > 0) {
         this.removeAllRenderables();
@@ -819,24 +814,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         continue;
       }
 
-      // Check if any planning scene layer is visible and shows collision objects
-      let layerAllowsVisibility = false;
-      for (const layerConfig of Object.values(this.renderer.config.layers)) {
-        if (layerConfig?.layerId === LAYER_ID) {
-          const config = layerConfig as Partial<LayerSettingsPlanningScene>;
-          const layerVisible = config.visible !== false;
-          const showCollisionObjects = config.showCollisionObjects !== false;
-          if (layerVisible && showCollisionObjects) {
-            layerAllowsVisibility = true;
-            break; // Found at least one layer that allows visibility
-          }
-        }
-      }
-
-      // Apply layer-level visibility override
-      if (!layerAllowsVisibility) {
-        collisionObject.visible = false;
-        continue;
+      if (collisionObject.userData.isAttachedObject) {
+        collisionObject.visible = this.settings.showAttachedObjects && collisionObject.userData.settings.visible;
+      } else {
+        collisionObject.visible = this.settings.showCollisionObjects && collisionObject.userData.settings.visible;
       }
     }
   }
@@ -861,7 +842,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     this.receiveTime = toNanoSec(messageEvent.receiveTime);
     this.messageTime = messageEvent.message.robot_state?.joint_state?.header?.stamp
       ? BigInt(messageEvent.message.robot_state.joint_state.header.stamp.sec ?? 0) * 1000000000n +
-        BigInt(messageEvent.message.robot_state.joint_state.header.stamp.nsec ?? 0)
+      BigInt(messageEvent.message.robot_state.joint_state.header.stamp.nsec ?? 0)
       : toNanoSec(messageEvent.receiveTime);
 
     // Find the instance ID for this topic
@@ -890,9 +871,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         this.replaceEntireScene(scene);
       }
     } catch (error) {
-      const errorMessage = `Failed to process planning scene message from topic "${topic}": ${
-        error instanceof Error ? error.message : String(error)
-      }`;
+      const errorMessage = `Failed to process planning scene message from topic "${topic}": ${error instanceof Error ? error.message : String(error)
+        }`;
 
       // Report error to settings tree
       this.renderer.settings.errors.add(
@@ -1145,7 +1125,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       };
 
       // Apply the collision object operation (usually ADD for attached objects)
-      this.applyCollisionObjectOperation(attachedCollisionObject);
+      this.applyCollisionObjectOperation(attachedCollisionObject, true);
 
       log.info(`Processed attached collision object '${objectId}' attached to link '${linkName}'`);
     } finally {
@@ -1451,7 +1431,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Apply collision object operations (ADD, REMOVE, APPEND, MOVE)
-  private applyCollisionObjectOperation(object: PartialMessage<CollisionObject>): void {
+  private applyCollisionObjectOperation(object: PartialMessage<CollisionObject>, isAttachedObject: boolean = false): void {
     // Validate required fields
     if (object.id == undefined) {
       const errorMessage = t("threeDee:collisionObjectMissingId");
@@ -1511,7 +1491,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
       switch (operation) {
         case CollisionObjectOperation.ADD: {
-          this.handleAddOperation(object);
+          this.handleAddOperation(object, isAttachedObject);
           break;
         }
         case CollisionObjectOperation.REMOVE: {
@@ -1558,7 +1538,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Handle ADD operation - creates new CollisionObjectRenderable instances
-  private handleAddOperation(object: PartialMessage<CollisionObject>): void {
+  private handleAddOperation(object: PartialMessage<CollisionObject>, isAttachedObject: boolean = false): void {
     const objectId = object.id!;
 
     // Validate required fields for ADD operation
@@ -1623,8 +1603,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const instanceId = this.findInstanceIdForCollisionObject(objectId) ?? this.currentInstanceId;
       const layerConfig = instanceId
         ? (this.renderer.config.layers[instanceId] as
-            | Partial<LayerSettingsPlanningScene>
-            | undefined)
+          | Partial<LayerSettingsPlanningScene>
+          | undefined)
         : undefined;
       const savedObjectSettings = layerConfig?.collisionObjects?.[objectId];
 
@@ -1648,6 +1628,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         },
         collisionObject: fullObject,
         shapes: new Map<string, Renderable>(),
+        isAttachedObject,
       };
 
       // Create the collision object renderable
@@ -1657,7 +1638,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       renderable.update(fullObject);
 
       // Set visibility based on extension and object settings
-      renderable.visible = this.settings.showCollisionObjects && userData.settings.visible;
+      const showToggle = isAttachedObject ? this.settings.showAttachedObjects : this.settings.showCollisionObjects;
+      renderable.visible = showToggle && userData.settings.visible;
 
       // Add to the scene
       this.add(renderable);
@@ -1692,16 +1674,16 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     // Clean up object hash when removed for performance optimization
     this.objectHashes.delete(objectId);
 
-      // Clear any errors for this object
-      const errInstanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
-      if (errInstanceId) {
-        this.renderer.settings.errors.clearPath([
-          "layers",
-          errInstanceId,
-          "collisionObjects",
-          objectId,
-        ]);
-      }
+    // Clear any errors for this object
+    const errInstanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+    if (errInstanceId) {
+      this.renderer.settings.errors.clearPath([
+        "layers",
+        errInstanceId,
+        "collisionObjects",
+        objectId,
+      ]);
+    }
 
     log.info(`Removed collision object '${objectId}'`);
   }
@@ -2023,16 +2005,16 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         partialObject.meshes?.map((mesh) => {
           const vertices = Array.isArray(mesh?.vertices)
             ? (mesh!.vertices.filter(
-                (v): v is { x: number; y: number; z: number } => v != undefined,
-              ) as { x: number; y: number; z: number }[])
+              (v): v is { x: number; y: number; z: number } => v != undefined,
+            ) as { x: number; y: number; z: number }[])
             : ([] as { x: number; y: number; z: number }[]);
           const triangles = Array.isArray(mesh?.triangles)
             ? (mesh!.triangles.map((triangle) => {
-                const indices = triangle?.vertex_indices
-                  ? normalizeVertexIndices(triangle.vertex_indices)
-                  : [];
-                return { vertex_indices: new Uint32Array(indices) };
-              }) as { vertex_indices: Uint32Array }[])
+              const indices = triangle?.vertex_indices
+                ? normalizeVertexIndices(triangle.vertex_indices)
+                : [];
+              return { vertex_indices: new Uint32Array(indices) };
+            }) as { vertex_indices: Uint32Array }[])
             : ([] as { vertex_indices: Uint32Array }[]);
           return { vertices, triangles } as Mesh;
         }) ?? [],
@@ -2288,8 +2270,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       if (path.length === 3 && path[2] === "visible") {
         // Layer visibility toggle - path is ["layers", instanceId, "visible"]
         this.saveSetting(path, value);
-        // Visibility will be recalculated in the next frame by startFrame()
-        // No need to manually update all objects here
+        this.visible = value as boolean;
         this.updateSettingsTree();
       } else if (path.length === 3) {
         // Layer field settings (defaultColor, sceneOpacity, etc.)
@@ -2406,6 +2387,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         renderable.update(renderable.userData.collisionObject);
       }
     } else if (fieldName === "showCollisionObjects") {
+      // Visibility will be recalculated in the next frame by startFrame()
+      // No need to manually update all objects here
+    } else if (fieldName === "showAttachedObjects") {
       // Visibility will be recalculated in the next frame by startFrame()
       // No need to manually update all objects here
     } else if (fieldName === "showOctomap") {

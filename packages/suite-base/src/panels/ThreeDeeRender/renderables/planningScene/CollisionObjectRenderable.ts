@@ -42,6 +42,7 @@ export type CollisionObjectUserData = BaseUserData & {
   settings: CollisionObjectSettings;
   collisionObject: CollisionObject;
   shapes: Map<string, Renderable>;
+  isAttachedObject: boolean;
 };
 
 export class CollisionObjectRenderable extends Renderable<CollisionObjectUserData> {
@@ -210,9 +211,8 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         const primitiveTypeName = primitive
           ? SolidPrimitiveType[primitive.type] || `UNKNOWN`
           : "UNDEFINED";
-        const errorMessage = `Failed to create primitive (${primitiveTypeName}): ${
-          error instanceof Error ? error.message : String(error)
-        }`;
+        const errorMessage = `Failed to create primitive (${primitiveTypeName}): ${error instanceof Error ? error.message : String(error)
+          }`;
 
         // Report shape creation error to settings tree at per-shape path
         this.renderer.settings.errors.add(
@@ -363,8 +363,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         this.add(shape);
         this.userData.shapes.set(shapeKey, shape);
       } catch (error) {
-          const errorMessage = `Failed to create mesh: ${
-            error instanceof Error ? error.message : String(error)
+        const errorMessage = `Failed to create mesh: ${error instanceof Error ? error.message : String(error)
           }`;
 
         // Report mesh loading error to settings tree at per-shape path
@@ -485,9 +484,8 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         this.add(shape);
         this.userData.shapes.set(shapeKey, shape);
       } catch (error) {
-        const errorMessage = `Failed to create plane: ${
-          error instanceof Error ? error.message : String(error)
-        }`;
+        const errorMessage = `Failed to create plane: ${error instanceof Error ? error.message : String(error)
+          }`;
 
         // Report plane creation error to settings tree at per-shape path
         this.renderer.settings.errors.add(
@@ -584,7 +582,7 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
   }
 
   private createConeShape(dimensions: number[]): RenderableCone {
-    const marker = this.createMarkerFromDimensions(MarkerType.CYLINDER, dimensions); // Use CYLINDER type for cone
+    const marker = this.createMarkerFromDimensions(MarkerType.CYLINDER, dimensions); // Ros doesn't have CONE type, but since cone and cylinder share the same properties, we use CYLINDER type for cone
     return new RenderableCone(
       this.userData.topic ?? "",
       marker,

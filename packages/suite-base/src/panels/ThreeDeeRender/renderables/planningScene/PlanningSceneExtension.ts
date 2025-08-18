@@ -1091,7 +1091,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     if (robotState.attached_collision_objects) {
       for (const attachedObject of robotState.attached_collision_objects) {
         if (attachedObject?.object && attachedObject.link_name) {
-          this.processAttachedCollisionObject(attachedObject, scene);
+          this.processAttachedCollisionObject(attachedObject);
         }
       }
     }
@@ -1100,38 +1100,24 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Process an attached collision object
   private processAttachedCollisionObject(
     attachedObject: PartialMessage<AttachedCollisionObject>,
-    scene?: PartialMessage<PlanningScene>,
   ): void {
     const object = attachedObject.object!;
     const linkName = attachedObject.link_name!;
     const objectId = object.id!;
 
-    // Temporarily store the current scene to preserve color information
-    const previousScene = this.currentScene;
+    // Create a modified collision object with the link frame
+    const attachedCollisionObject: PartialMessage<CollisionObject> = {
+      ...object,
+      header: {
+        ...object.header,
+        frame_id: linkName, // Use the link name as the frame instead of the object's original frame
+      },
+    };
 
-    // If we have scene data, temporarily update currentScene to ensure color information is available
-    if (scene) {
-      this.currentScene = scene;
-    }
+    // Apply the collision object operation (usually ADD for attached objects)
+    this.applyCollisionObjectOperation(attachedCollisionObject, true);
 
-    try {
-      // Create a modified collision object with the link frame
-      const attachedCollisionObject: PartialMessage<CollisionObject> = {
-        ...object,
-        header: {
-          ...object.header,
-          frame_id: linkName, // Use the link name as the frame instead of the object's original frame
-        },
-      };
-
-      // Apply the collision object operation (usually ADD for attached objects)
-      this.applyCollisionObjectOperation(attachedCollisionObject, true);
-
-      log.info(`Processed attached collision object '${objectId}' attached to link '${linkName}'`);
-    } finally {
-      // Restore the previous scene state
-      this.currentScene = previousScene;
-    }
+    log.info(`Processed attached collision object '${objectId}' attached to link '${linkName}'`);
   }
 
   // Replace entire scene

@@ -7,6 +7,8 @@
 
 import * as THREE from "three";
 
+import Logger from "@lichtblick/log";
+import { LayerSettingsPlanningScene } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/planningScene/PlanningSceneExtension";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
 import {
@@ -43,6 +45,18 @@ export type CollisionObjectUserData = BaseUserData & {
   collisionObject: CollisionObject;
   shapes: Map<string, Renderable>;
   isAttachedObject: boolean;
+};
+
+export type CollisionObjectLayerConfig = {
+  visible?: boolean;
+  color?: string;
+  opacity?: number;
+  shapes?: Record<
+    string,
+    {
+      visible?: boolean;
+    }
+  >;
 };
 
 export class CollisionObjectRenderable extends Renderable<CollisionObjectUserData> {
@@ -193,16 +207,14 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         // Assign per-shape settings path and persisted visibility
         const shapeKey = `primitive_${i}`;
         shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
-        const instanceId = this.userData.settingsPath?.[1];
+        const instanceId = this.userData.settingsPath[1];
         const objectId = this.userData.collisionObject.id;
         const layerConfig = instanceId
-          ? (this.renderer.config.layers[instanceId] as any)
+          ? (this.renderer.config.layers[instanceId] as LayerSettingsPlanningScene)
           : undefined;
         const savedVisible = layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
-        const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
-        if (shape.userData.settings) {
-          shape.userData.settings.visible = Boolean(visible);
-        }
+        const visible = savedVisible ?? shape.userData.settings.visible;
+        shape.userData.settings.visible = Boolean(visible);
         shape.visible = Boolean(visible);
 
         this.add(shape); // Add as child
@@ -211,8 +223,9 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         const primitiveTypeName = primitive
           ? SolidPrimitiveType[primitive.type] || `UNKNOWN`
           : "UNDEFINED";
-        const errorMessage = `Failed to create primitive (${primitiveTypeName}): ${error instanceof Error ? error.message : String(error)
-          }`;
+        const errorMessage = `Failed to create primitive (${primitiveTypeName}): ${
+          error instanceof Error ? error.message : String(error)
+        }`;
 
         // Report shape creation error to settings tree at per-shape path
         this.renderer.settings.errors.add(
@@ -338,17 +351,14 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         // Assign per-shape settings path and persisted visibility
         const shapeKey = `mesh_${i}`;
         shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
-        const instanceId = this.userData.settingsPath?.[1];
+        const instanceId = this.userData.settingsPath[1];
         const objectId = this.userData.collisionObject.id;
         const layerConfig = instanceId
-          ? (this.renderer.config.layers[instanceId] as any)
+          ? (this.renderer.config.layers[instanceId] as LayerSettingsPlanningScene)
           : undefined;
-        const savedVisible =
-          layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
-        const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
-        if (shape.userData.settings) {
-          shape.userData.settings.visible = Boolean(visible);
-        }
+        const savedVisible = layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
+        const visible = savedVisible ?? shape.userData.settings.visible;
+        shape.userData.settings.visible = Boolean(visible);
         shape.visible = Boolean(visible);
 
         // Set LOCAL position/rotation relative to this container
@@ -363,8 +373,9 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         this.add(shape);
         this.userData.shapes.set(shapeKey, shape);
       } catch (error) {
-        const errorMessage = `Failed to create mesh: ${error instanceof Error ? error.message : String(error)
-          }`;
+        const errorMessage = `Failed to create mesh: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
 
         // Report mesh loading error to settings tree at per-shape path
         this.renderer.settings.errors.add(
@@ -459,7 +470,10 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         shape.quaternion.copy(combinedQuaternion);
 
         // Apply plane offset along normal: offset = -(d / |n|) * n, rotated by pose orientation
-        const offsetLocal = normal.clone().multiplyScalar(-d / nLen).applyQuaternion(poseQuat);
+        const offsetLocal = normal
+          .clone()
+          .multiplyScalar(-d / nLen)
+          .applyQuaternion(poseQuat);
         shape.position.set(
           pose.position.x + offsetLocal.x,
           pose.position.y + offsetLocal.y,
@@ -469,23 +483,22 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
         // Assign per-shape settings path and persisted visibility
         const shapeKey = `plane_${i}`;
         shape.userData.settingsPath = [...this.userData.settingsPath, shapeKey];
-        const instanceId = this.userData.settingsPath?.[1];
+        const instanceId = this.userData.settingsPath[1];
         const objectId = this.userData.collisionObject.id;
         const layerConfig = instanceId
-          ? (this.renderer.config.layers[instanceId] as any)
+          ? (this.renderer.config.layers[instanceId] as LayerSettingsPlanningScene)
           : undefined;
         const savedVisible = layerConfig?.collisionObjects?.[objectId]?.shapes?.[shapeKey]?.visible;
-        const visible = savedVisible ?? (shape.userData.settings?.visible ?? true);
-        if (shape.userData.settings) {
-          shape.userData.settings.visible = Boolean(visible);
-        }
+        const visible = savedVisible ?? shape.userData.settings.visible;
+        shape.userData.settings.visible = Boolean(visible);
         shape.visible = Boolean(visible);
 
         this.add(shape);
         this.userData.shapes.set(shapeKey, shape);
       } catch (error) {
-        const errorMessage = `Failed to create plane: ${error instanceof Error ? error.message : String(error)
-          }`;
+        const errorMessage = `Failed to create plane: ${
+          error instanceof Error ? error.message : String(error)
+        }`;
 
         // Report plane creation error to settings tree at per-shape path
         this.renderer.settings.errors.add(
@@ -517,7 +530,9 @@ export class CollisionObjectRenderable extends Renderable<CollisionObjectUserDat
     const obj = this.userData.collisionObject;
     let failed = 0;
     for (let i = 0; i < obj.primitives.length; i++) {
-      if (this.renderer.settings.errors.errors.errorAtPath([...base, `primitive_${i}`]) != undefined) {
+      if (
+        this.renderer.settings.errors.errors.errorAtPath([...base, `primitive_${i}`]) != undefined
+      ) {
         failed++;
       }
     }

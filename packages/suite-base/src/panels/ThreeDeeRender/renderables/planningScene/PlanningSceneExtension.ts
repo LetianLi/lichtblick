@@ -7,7 +7,6 @@
 
 import { t } from "i18next";
 import * as _ from "lodash-es";
-import * as THREE from "three";
 
 import { filterMap } from "@lichtblick/den/collection";
 import Logger from "@lichtblick/log";
@@ -17,7 +16,7 @@ import { SettingsTreeAction, SettingsTreeFields, SettingsTreeChildren } from "@l
 import {
   CollisionObjectRenderable,
   CollisionObjectUserData,
-  CollisionObjectSettings,
+  CollisionObjectLayerConfig,
 } from "./CollisionObjectRenderable";
 import {
   PlanningScene,
@@ -41,7 +40,6 @@ import type { IRenderer, AnyRendererSubscription } from "../../IRenderer";
 import { Renderable } from "../../Renderable";
 import { SceneExtension, PartialMessageEvent, PartialMessage } from "../../SceneExtension";
 import { SettingsTreeEntry, SettingsTreeNodeWithActionHandler } from "../../SettingsManager";
-import { stringToRgba } from "../../color";
 import { Header } from "../../ros";
 import { BaseSettings, CustomLayerSettings } from "../../settings";
 import { AnyFrameId, Pose } from "../../transforms";
@@ -71,8 +69,7 @@ export type LayerSettingsPlanningScene = CustomLayerSettings & {
   showCollisionObjects: boolean;
   showAttachedObjects: boolean;
   showOctomap: boolean;
-  // Store per-collision-object settings
-  collisionObjects?: Record<string, Partial<CollisionObjectSettings>>;
+  collisionObjects?: Record<string, CollisionObjectLayerConfig>;
 };
 
 const DEFAULT_PLANNING_SCENE_SETTINGS: PlanningSceneSettings = {
@@ -501,27 +498,15 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     const ids = new Set<string>();
     for (const [objectId, renderable] of this.renderables.entries()) {
       const path = renderable.userData.settingsPath;
-      if (path?.[1] === instanceId) {
+      if (path[1] === instanceId) {
         ids.add(objectId);
       }
     }
 
-    // Collect IDs from error tree at ["layers", instanceId, "collisionObjects"]
-    let node = this.renderer.settings.errors.errors as any;
-    for (const segment of ["layers", instanceId, "collisionObjects"]) {
-      node = node?.children?.get?.(segment);
-      if (!node) break;
-    }
-    if (node?.children) {
-      for (const key of node.children.keys()) {
-        ids.add(String(key));
-      }
-    }
-
-    // Build nodes for each ID, using renderable info when available, otherwise an error-only node
+    // Build nodes for each ID that has a renderable
     for (const objectId of ids) {
       const renderable = this.renderables.get(objectId);
-      if (renderable && renderable.userData.settingsPath?.[1] === instanceId) {
+      if (renderable && renderable.userData.settingsPath[1] === instanceId) {
         const userData = renderable.userData;
         const settings = userData.settings;
         const collisionObject = userData.collisionObject;
@@ -551,9 +536,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         };
 
         // Get errors for this object
-        const errors = this.renderer.settings.errors.errors.errorAtPath(
-          userData.settingsPath,
-        );
+        const errors = this.renderer.settings.errors.errors.errorAtPath(userData.settingsPath);
 
         const node: SettingsTreeNodeWithActionHandler = {
           label: objectId,
@@ -565,19 +548,22 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           children: (() => {
             const children: SettingsTreeChildren = {};
             // Resolve layer config for saved per-shape visibility
-            const layerConfig = this.renderer.config.layers[instanceId] as any;
+            const layerConfig = this.renderer.config.layers[instanceId] as
+              | Partial<LayerSettingsPlanningScene>
+              | undefined;
 
             // Primitives (include type in label)
             for (let i = 0; i < primitiveCount; i++) {
               const key = `primitive_${i}`;
-              const savedVisible = layerConfig?.collisionObjects?.[objectId]?.shapes?.[key]?.visible as
-                | boolean
-                | undefined;
+              const savedVisible =
+                layerConfig?.collisionObjects?.[objectId]?.shapes?.[key]?.visible;
               const fallbackVisible = userData.shapes.get(key)?.userData.settings.visible ?? true;
               const prim = collisionObject.primitives[i];
               const typeName =
-                prim && typeof prim.type === "number"
-                  ? (SolidPrimitiveType[prim.type] ?? "UNKNOWN")
+                prim &&
+                typeof prim.type === "number" &&
+                Object.values(SolidPrimitiveType).includes(prim.type)
+                  ? SolidPrimitiveType[prim.type]
                   : "UNKNOWN";
               children[key] = {
                 label: `Primitive ${i} (${typeName})`,
@@ -587,15 +573,14 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
                   key,
                 ]),
                 defaultExpansionState: "collapsed",
-                children: { "dummy": undefined }, // Force dropdown arrow
+                children: { dummy: undefined }, // Force dropdown arrow
               };
             }
             // Meshes
             for (let i = 0; i < meshCount; i++) {
               const key = `mesh_${i}`;
-              const savedVisible = layerConfig?.collisionObjects?.[objectId]?.shapes?.[key]?.visible as
-                | boolean
-                | undefined;
+              const savedVisible =
+                layerConfig?.collisionObjects?.[objectId]?.shapes?.[key]?.visible;
               const fallbackVisible = userData.shapes.get(key)?.userData.settings.visible ?? true;
               children[key] = {
                 label: `Mesh ${i}`,
@@ -605,15 +590,14 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
                   key,
                 ]),
                 defaultExpansionState: "collapsed",
-                children: { "dummy": undefined }, // Force dropdown arrow
+                children: { dummy: undefined }, // Force dropdown arrow
               };
             }
             // Planes
             for (let i = 0; i < planeCount; i++) {
               const key = `plane_${i}`;
-              const savedVisible = layerConfig?.collisionObjects?.[objectId]?.shapes?.[key]?.visible as
-                | boolean
-                | undefined;
+              const savedVisible =
+                layerConfig?.collisionObjects?.[objectId]?.shapes?.[key]?.visible;
               const fallbackVisible = userData.shapes.get(key)?.userData.settings.visible ?? true;
               children[key] = {
                 label: `Plane ${i}`,
@@ -623,7 +607,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
                   key,
                 ]),
                 defaultExpansionState: "collapsed",
-                children: { "dummy": undefined }, // Force dropdown arrow
+                children: { dummy: undefined }, // Force dropdown arrow
               };
             }
             return children;
@@ -650,7 +634,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           error,
           handler: this.#handleLayerSettingsAction,
           defaultExpansionState: "collapsed",
-          children: { "dummy": undefined }, // Force dropdown arrow
+          children: { dummy: undefined }, // Force dropdown arrow
         };
         nodes[objectId] = node;
       }
@@ -714,11 +698,18 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         layerConfig.collisionObjects = {};
       }
       if (!layerConfig.collisionObjects[objectId]) {
-        layerConfig.collisionObjects[objectId] = {};
+        layerConfig.collisionObjects[objectId] = {} as CollisionObjectLayerConfig;
       }
 
-      // Save the specific setting
-      (layerConfig.collisionObjects[objectId] as Record<string, unknown>)[input] = value;
+      // Save the specific setting with proper typing
+      const objConfig = layerConfig.collisionObjects[objectId]!;
+      if (input === "visible") {
+        objConfig.visible = value as boolean;
+      } else if (input === "color") {
+        objConfig.color = value as string;
+      } else if (input === "opacity") {
+        objConfig.opacity = value as number;
+      }
     });
 
     // Update the settings tree to reflect the changes
@@ -793,9 +784,14 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     fixedFrameId: AnyFrameId,
   ): void {
     // Fetch initial scene if we haven't done so yet and we're not already fetching
-    if (!this.initialSceneFetched && !this.fetchingInitialScene && this.visible) {
+    // Only fetch if there are visible planning scene layers configured
+    const hasVisibleLayers = Object.values(this.renderer.config.layers).some(
+      (layer) => layer?.layerId === LAYER_ID && layer.visible === true,
+    );
+
+    if (!this.initialSceneFetched && !this.fetchingInitialScene && hasVisibleLayers) {
       void this.fetchInitialScene();
-    } else if (!this.initialSceneFetched && !this.fetchingInitialScene && !this.visible) {
+    } else if (!this.initialSceneFetched && !this.fetchingInitialScene && !hasVisibleLayers) {
       // Clear any existing renderables if there are no visible layers
       if (this.renderables.size > 0) {
         this.removeAllRenderables();
@@ -814,10 +810,32 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         continue;
       }
 
+      // Check if any planning scene layer is visible and shows collision objects
+      let layerAllowsVisibility = false;
+      for (const layerConfig of Object.values(this.renderer.config.layers)) {
+        if (layerConfig?.layerId === LAYER_ID) {
+          const config = layerConfig as Partial<LayerSettingsPlanningScene>;
+          const layerVisible = config.visible !== false;
+          const showCollisionObjects = config.showCollisionObjects !== false;
+          if (layerVisible && showCollisionObjects) {
+            layerAllowsVisibility = true;
+            break; // Found at least one layer that allows visibility
+          }
+        }
+      }
+
+      // Apply layer-level visibility override
+      if (!layerAllowsVisibility) {
+        collisionObject.visible = false;
+        continue;
+      }
+
       if (collisionObject.userData.isAttachedObject) {
-        collisionObject.visible = this.settings.showAttachedObjects && collisionObject.userData.settings.visible;
+        collisionObject.visible =
+          this.settings.showAttachedObjects && collisionObject.userData.settings.visible;
       } else {
-        collisionObject.visible = this.settings.showCollisionObjects && collisionObject.userData.settings.visible;
+        collisionObject.visible =
+          this.settings.showCollisionObjects && collisionObject.userData.settings.visible;
       }
     }
   }
@@ -842,7 +860,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     this.receiveTime = toNanoSec(messageEvent.receiveTime);
     this.messageTime = messageEvent.message.robot_state?.joint_state?.header?.stamp
       ? BigInt(messageEvent.message.robot_state.joint_state.header.stamp.sec ?? 0) * 1000000000n +
-      BigInt(messageEvent.message.robot_state.joint_state.header.stamp.nsec ?? 0)
+        BigInt(messageEvent.message.robot_state.joint_state.header.stamp.nsec ?? 0)
       : toNanoSec(messageEvent.receiveTime);
 
     // Find the instance ID for this topic
@@ -871,8 +889,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
         this.replaceEntireScene(scene);
       }
     } catch (error) {
-      const errorMessage = `Failed to process planning scene message from topic "${topic}": ${error instanceof Error ? error.message : String(error)
-        }`;
+      const errorMessage = `Failed to process planning scene message from topic "${topic}": ${
+        error instanceof Error ? error.message : String(error)
+      }`;
 
       // Report error to settings tree
       this.renderer.settings.errors.add(
@@ -971,7 +990,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // Process the initial scene (treat as full scene replacement)
       try {
         this.replaceEntireScene(scene);
-      } catch (error) { // This try catch is a just-in-case for if replaceEntireScene fails to handle an internal error.
+      } catch (error) {
+        // This try catch is a just-in-case for if replaceEntireScene fails to handle an internal error.
         log.error(`Failed to replace entire scene:`, error);
       }
 
@@ -1085,7 +1105,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   // Process robot state including attached collision objects
   private processRobotState(
     robotState: PartialMessage<RobotState>,
-    scene?: PartialMessage<PlanningScene>,
+    _scene?: PartialMessage<PlanningScene>,
   ): void {
     // Process attached collision objects
     if (robotState.attached_collision_objects) {
@@ -1409,7 +1429,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
             vertexIndex < 0 ||
             vertexIndex >= mesh.vertices.length
           ) {
-            throw new Error(`mesh[${i}] triangle[${j}] invalid vertex index ${vertexIndex} (0-${mesh.vertices.length - 1})`);
+            throw new Error(
+              `mesh[${i}] triangle[${j}] invalid vertex index ${vertexIndex} (0-${mesh.vertices.length - 1})`,
+            );
           }
         }
       }
@@ -1417,7 +1439,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Apply collision object operations (ADD, REMOVE, APPEND, MOVE)
-  private applyCollisionObjectOperation(object: PartialMessage<CollisionObject>, isAttachedObject: boolean = false): void {
+  private applyCollisionObjectOperation(
+    object: PartialMessage<CollisionObject>,
+    // eslint-disable-next-line @lichtblick/no-boolean-parameters
+    isAttachedObject: boolean = false,
+  ): void {
     // Validate required fields
     if (object.id == undefined) {
       const errorMessage = t("threeDee:collisionObjectMissingId");
@@ -1524,7 +1550,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   }
 
   // Handle ADD operation - creates new CollisionObjectRenderable instances
-  private handleAddOperation(object: PartialMessage<CollisionObject>, isAttachedObject: boolean = false): void {
+  private handleAddOperation(
+    object: PartialMessage<CollisionObject>,
+    // eslint-disable-next-line @lichtblick/no-boolean-parameters
+    isAttachedObject: boolean = false,
+  ): void {
     const objectId = object.id!;
 
     // Validate required fields for ADD operation
@@ -1589,8 +1619,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const instanceId = this.findInstanceIdForCollisionObject(objectId) ?? this.currentInstanceId;
       const layerConfig = instanceId
         ? (this.renderer.config.layers[instanceId] as
-          | Partial<LayerSettingsPlanningScene>
-          | undefined)
+            | Partial<LayerSettingsPlanningScene>
+            | undefined)
         : undefined;
       const savedObjectSettings = layerConfig?.collisionObjects?.[objectId];
 
@@ -1624,7 +1654,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       renderable.update(fullObject);
 
       // Set visibility based on extension and object settings
-      const showToggle = isAttachedObject ? this.settings.showAttachedObjects : this.settings.showCollisionObjects;
+      const showToggle = isAttachedObject
+        ? this.settings.showAttachedObjects
+        : this.settings.showCollisionObjects;
       renderable.visible = showToggle && userData.settings.visible;
 
       // Add to the scene
@@ -1976,9 +2008,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       primitives:
         partialObject.primitives?.map((primitive) => {
           const typeValue =
-            typeof primitive?.type === "number" ? (primitive!.type as number) : (-1 as number);
+            typeof primitive?.type === "number" ? (primitive.type as number) : (-1 as number);
           const dims = Array.isArray(primitive?.dimensions)
-            ? normalizeDimensions(primitive!.dimensions!)
+            ? normalizeDimensions(primitive.dimensions)
             : [];
           return {
             type: typeValue,
@@ -1990,17 +2022,17 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       meshes:
         partialObject.meshes?.map((mesh) => {
           const vertices = Array.isArray(mesh?.vertices)
-            ? (mesh!.vertices.filter(
-              (v): v is { x: number; y: number; z: number } => v != undefined,
-            ) as { x: number; y: number; z: number }[])
+            ? (mesh.vertices.filter(
+                (v): v is { x: number; y: number; z: number } => v != undefined,
+              ) as { x: number; y: number; z: number }[])
             : ([] as { x: number; y: number; z: number }[]);
           const triangles = Array.isArray(mesh?.triangles)
-            ? (mesh!.triangles.map((triangle) => {
-              const indices = triangle?.vertex_indices
-                ? normalizeVertexIndices(triangle.vertex_indices)
-                : [];
-              return { vertex_indices: new Uint32Array(indices) };
-            }) as { vertex_indices: Uint32Array }[])
+            ? (mesh.triangles.map((triangle) => {
+                const indices = triangle?.vertex_indices
+                  ? normalizeVertexIndices(triangle.vertex_indices)
+                  : [];
+                return { vertex_indices: new Uint32Array(indices) };
+              }) as { vertex_indices: Uint32Array }[])
             : ([] as { vertex_indices: Uint32Array }[]);
           return { vertices, triangles } as Mesh;
         }) ?? [],
@@ -2008,8 +2040,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       planes:
         partialObject.planes?.map((plane) => {
           const coef =
-            Array.isArray(plane?.coef) && plane!.coef!.length === 4
-              ? (plane!.coef as [number, number, number, number])
+            Array.isArray(plane?.coef) && plane.coef.length === 4
+              ? (plane.coef as [number, number, number, number])
               : ([NaN, NaN, NaN, NaN] as [number, number, number, number]);
           return { coef } as { coef: [number, number, number, number] };
         }) ?? [],
@@ -2121,40 +2153,29 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       // If showing all, also recurse into shapes and set them visible
       if (visible) {
         for (const [, shape] of renderable.userData.shapes.entries()) {
-          if (shape.userData?.settings) {
-            shape.userData.settings.visible = true;
-          }
+          shape.userData.settings.visible = true;
           shape.visible = true;
         }
       }
     }
 
     // Update the configuration to persist the changes
-    this.renderer.updateConfig((draft) => {
-      const layerConfig = draft.layers[instanceId] as LayerSettingsPlanningScene | undefined;
-      if (!layerConfig?.collisionObjects) {
-        return;
+    for (const [objectId, renderable] of this.renderables.entries()) {
+      const objectInstanceId = this.findInstanceIdForCollisionObject(objectId);
+      if (objectInstanceId !== instanceId) {
+        continue;
       }
-      for (const objectId of Object.keys(layerConfig.collisionObjects)) {
-        if (!layerConfig.collisionObjects[objectId]) {
-          layerConfig.collisionObjects[objectId] = {} as any;
-        }
-        (layerConfig.collisionObjects[objectId] as Record<string, unknown>).visible = visible;
 
-        // When showing all, also mark all saved shapes visible in config
-        if (visible) {
-          const objCfg = layerConfig.collisionObjects[objectId] as any;
-          if (objCfg.shapes) {
-            for (const key of Object.keys(objCfg.shapes)) {
-              (objCfg.shapes[key] ??= {}).visible = true;
-            }
-          }
+      this.saveCollisionObjectSetting(objectId, "visible", visible);
+
+      // If showing all, also save shape visibility settings
+      if (visible) {
+        for (const shapeKey of renderable.userData.shapes.keys()) {
+          // Save each shape's visibility setting
+          this.#handleShapeVisibilityUpdate(objectId, shapeKey, true);
         }
       }
-    });
-
-    // Update the settings tree to reflect the changes
-    this.updateSettingsTree();
+    }
   }
 
   // Custom layer handlers
@@ -2256,7 +2277,8 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       if (path.length === 3 && path[2] === "visible") {
         // Layer visibility toggle - path is ["layers", instanceId, "visible"]
         this.saveSetting(path, value);
-        this.visible = value as boolean;
+        // Visibility will be recalculated in the next frame by startFrame()
+        // No need to manually update extension visibility here
         this.updateSettingsTree();
       } else if (path.length === 3) {
         // Layer field settings (defaultColor, sceneOpacity, etc.)
@@ -2298,9 +2320,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     const shape = renderable.userData.shapes.get(shapeKey);
     if (shape) {
-      if (shape.userData.settings) {
-        shape.userData.settings.visible = visible;
-      }
+      shape.userData.settings.visible = visible;
       shape.visible = visible;
     }
 
@@ -2311,7 +2331,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     }
 
     this.renderer.updateConfig((draft) => {
-      const layerConfig = draft.layers[instanceId] as any;
+      const layerConfig = draft.layers[instanceId] as LayerSettingsPlanningScene | undefined;
       if (!layerConfig) {
         return;
       }

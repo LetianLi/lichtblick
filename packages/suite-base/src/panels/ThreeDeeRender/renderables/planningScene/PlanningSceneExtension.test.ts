@@ -645,9 +645,12 @@ describe("PlanningSceneExtension", () => {
 
       // Ensure we have an initial scene to avoid triggering replaceEntireScene on diff
       extension.retryFetchInitialScene();
-      await waitFor(() => expect(extension.hasInitialScene()).toBe(true));
+      await waitFor(() => {
+        expect(extension.hasInitialScene()).toBe(true);
+      });
 
-      const handler = extension.getSubscriptions()[0]?.subscription.handler!;
+      const subscriptions = extension.getSubscriptions();
+      const handler = subscriptions[0]?.subscription.handler;
 
       const first = createPlanningScene([createCollisionObject("hash_obj")]);
       first.is_diff = true;
@@ -657,14 +660,14 @@ describe("PlanningSceneExtension", () => {
 
       const updateSpy = jest.spyOn(CollisionObjectRenderable.prototype as any, "update");
 
-      handler(createMessageEvent(first));
+      handler!(createMessageEvent(first));
 
       // One renderable created and updated once
       expect(extension.renderables.size).toBe(1);
       expect(updateSpy).toHaveBeenCalledTimes(1);
 
       // Same object again should be skipped by hash fast-path
-      handler(createMessageEvent(second));
+      handler!(createMessageEvent(second));
       expect(extension.renderables.size).toBe(1);
       expect(updateSpy).toHaveBeenCalledTimes(1);
 

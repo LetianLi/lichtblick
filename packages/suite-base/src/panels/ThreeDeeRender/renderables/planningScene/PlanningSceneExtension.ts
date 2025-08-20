@@ -109,7 +109,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
   private topic = DEFAULT_PLANNING_SCENE_TOPIC;
   private receiveTime = 0n;
   private messageTime = 0n;
-  private currentInstanceId?: string; // Track which layer instance is currently being processed
+  private currentInstanceId?: string; // Track which layer instance is currently being processed. This should not be used because this class represents the extension and should have all layers.
 
   // Settings
   private settings: PlanningSceneSettings = { ...DEFAULT_PLANNING_SCENE_SETTINGS };
@@ -335,7 +335,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     this.fetchingInitialScene = false;
 
     // Clear all settings errors for this extension
-    this.renderer.settings.errors.clearPath(["extensions", PlanningSceneExtension.extensionId]);
+    // Note: This extension creates custom layers, so we need to clear errors for each layer instance
+    const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+    if (instanceId) {
+      this.renderer.settings.errors.clearPath(["layers", instanceId, "collisionObjects"]);
+    }
 
     // Clean up subscription and renderables (this calls dispose() on all renderables)
     super.dispose();
@@ -1928,11 +1932,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     this.objectHashes.clear();
 
     // Clear all collision object errors
-    this.renderer.settings.errors.clearPath([
-      "extensions",
-      PlanningSceneExtension.extensionId,
-      "collisionObjects",
-    ]);
+    const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+    if (instanceId) {
+      this.renderer.settings.errors.clearPath(["layers", instanceId, "collisionObjects"]);
+    }
   }
 
   // Public method to manually retry fetching initial scene

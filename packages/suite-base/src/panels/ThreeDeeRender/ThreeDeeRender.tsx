@@ -27,7 +27,7 @@ import {
 } from "@lichtblick/suite";
 import { AppSetting } from "@lichtblick/suite-base/AppSetting";
 import { useAnalytics } from "@lichtblick/suite-base/context/AnalyticsContext";
-import { DEFAULT_SCENE_EXTENSION_CONFIG } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
+import { createSceneExtensionConfig } from "@lichtblick/suite-base/panels/ThreeDeeRender/SceneExtensionConfig";
 import { PANEL_STYLE } from "@lichtblick/suite-base/panels/ThreeDeeRender/constants";
 import ThemeProvider from "@lichtblick/suite-base/theme/ThemeProvider";
 
@@ -112,6 +112,17 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     [enqueueSnackbar],
   );
 
+  // Create a properly bound callback for callService to avoid unbound-method linting errors
+  const boundCallService = useCallback(
+    async (service: string, request: unknown): Promise<unknown> => {
+      if (!context.callService) {
+        throw new Error("Service calls are not supported by this data source");
+      }
+      return await context.callService(service, request);
+    },
+    [context],
+  );
+
   useEffect(() => {
     const newRenderer = canvas
       ? new Renderer({
@@ -119,9 +130,10 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
           config: configRef.current,
           interfaceMode,
           fetchAsset,
+          // Use the factory function to create scene extension config with context
           sceneExtensionConfig: _.merge(
             {},
-            DEFAULT_SCENE_EXTENSION_CONFIG,
+            createSceneExtensionConfig({ callService: boundCallService }), // Pass bound callService to the factory
             customSceneExtensions ?? {},
           ),
           displayTemporaryError,
@@ -143,6 +155,7 @@ export function ThreeDeeRender(props: Readonly<ThreeDeeRenderProps>): React.JSX.
     customCameraModels,
     interfaceMode,
     fetchAsset,
+    boundCallService, // Use bound callService in dependencies
     testOptions,
     displayTemporaryError,
   ]);

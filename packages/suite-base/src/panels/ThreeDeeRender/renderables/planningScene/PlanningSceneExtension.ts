@@ -408,14 +408,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
         // Add Service Status and Collision Objects sections to each custom layer
         const layerPath = ["layers", instanceId];
-        const serviceError = this.renderer.settings.errors.errors.errorAtPath([
-          ...layerPath,
-          "service",
-        ]);
-        const messageError = this.renderer.settings.errors.errors.errorAtPath([
-          ...layerPath,
-          "messageProcessing",
-        ]);
 
         const children: SettingsTreeChildren = {};
 
@@ -456,7 +448,6 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
               label: t("threeDee:refetch"),
             },
           ],
-          error: serviceError,
         };
 
         // Add collision objects section for this layer
@@ -488,7 +479,7 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
             order: layerConfig.order,
             handler: this.#handleLayerSettingsAction,
             children,
-            error: messageError,
+            error: this.renderer.settings.errors.errors.errorAtPath(layerPath),
           },
         });
       }
@@ -882,11 +873,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     try {
       // Clear any previous message processing errors
-      this.renderer.settings.errors.remove(
-        ["extensions", PlanningSceneExtension.extensionId, "messageProcessing"],
-        MESSAGE_PROCESSING_ERROR,
-      );
-
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
+        this.renderer.settings.errors.remove(["layers", instanceId], MESSAGE_PROCESSING_ERROR);
+      }
       if (scene.is_diff === true) {
         // Apply differential update to existing scene
         this.applyDifferentialUpdate(scene);
@@ -900,11 +890,14 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       }`;
 
       // Report error to settings tree
-      this.renderer.settings.errors.add(
-        ["extensions", PlanningSceneExtension.extensionId, "messageProcessing"],
-        MESSAGE_PROCESSING_ERROR,
-        errorMessage,
-      );
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
+        this.renderer.settings.errors.add(
+          ["layers", instanceId],
+          MESSAGE_PROCESSING_ERROR,
+          errorMessage,
+        );
+      }
     }
   };
 
@@ -915,11 +908,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const errorMessage = t("threeDee:serviceClientUnavailable");
 
       // Report error to settings tree
-      this.renderer.settings.errors.add(
-        ["extensions", PlanningSceneExtension.extensionId, "service"],
-        SERVICE_ERROR,
-        errorMessage,
-      );
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
+        this.renderer.settings.errors.add(["layers", instanceId], SERVICE_ERROR, errorMessage);
+      }
       return;
     }
 
@@ -938,10 +930,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
 
     try {
       // Clear any previous service errors
-      this.renderer.settings.errors.remove(
-        ["extensions", PlanningSceneExtension.extensionId, "service"],
-        SERVICE_ERROR,
-      );
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
+        this.renderer.settings.errors.remove(["layers", instanceId], SERVICE_ERROR);
+      }
 
       const request: GetPlanningSceneRequest = {
         components: createMinimalPlanningSceneComponents(),
@@ -1005,10 +997,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       this.initialSceneFetched = true;
 
       // Clear any service errors on success
-      this.renderer.settings.errors.remove(
-        ["extensions", PlanningSceneExtension.extensionId, "service"],
-        SERVICE_ERROR,
-      );
+      if (instanceId) {
+        this.renderer.settings.errors.remove(["layers", instanceId], SERVICE_ERROR);
+      }
     } catch (error) {
       let errorMessage: string;
 
@@ -1028,11 +1019,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       log.warn(errorMessage);
 
       // Report error to settings tree
-      this.renderer.settings.errors.add(
-        ["extensions", PlanningSceneExtension.extensionId, "service"],
-        SERVICE_ERROR,
-        errorMessage,
-      );
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
+        this.renderer.settings.errors.add(["layers", instanceId], SERVICE_ERROR, errorMessage);
+      }
 
       // Don't mark as fetched so we can retry later
       this.initialSceneFetched = false;
@@ -1288,11 +1278,14 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const errorMessage = `Message validation failed in topic "${topic}": ${error instanceof Error ? error.message : String(error)}`;
 
       // Report validation error to settings tree
-      this.renderer.settings.errors.add(
-        ["extensions", PlanningSceneExtension.extensionId, "messageProcessing"],
-        MESSAGE_PROCESSING_ERROR,
-        errorMessage,
-      );
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
+        this.renderer.settings.errors.add(
+          ["layers", instanceId],
+          MESSAGE_PROCESSING_ERROR,
+          errorMessage,
+        );
+      }
 
       return false;
     }
@@ -1454,11 +1447,11 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
     if (object.id == undefined) {
       const errorMessage = t("threeDee:collisionObjectMissingId");
 
-      // Report error to settings tree (use layer path since we don't have an ID)
-      const instId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
-      if (instId) {
+      // Report error to settings tree
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
         this.renderer.settings.errors.add(
-          ["layers", instId, "messageProcessing"],
+          ["layers", instanceId],
           MESSAGE_PROCESSING_ERROR,
           errorMessage,
         );
@@ -1470,10 +1463,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const errorMessage = `Collision object '${object.id}' missing required 'operation' field, cannot process`;
 
       // Report error to settings tree on the layer path
-      const instId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
-      if (instId) {
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
         this.renderer.settings.errors.add(
-          ["layers", instId, "collisionObjects", object.id],
+          ["layers", instanceId, "collisionObjects", object.id],
           MESSAGE_PROCESSING_ERROR,
           errorMessage,
         );
@@ -1499,10 +1492,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       }
 
       // Clear any previous errors for this collision object
-      const errInstanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
-      if (errInstanceId) {
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
         this.renderer.settings.errors.remove(
-          ["layers", errInstanceId, "collisionObjects", objectId],
+          ["layers", instanceId, "collisionObjects", objectId],
           MESSAGE_PROCESSING_ERROR,
         );
       }
@@ -1528,10 +1521,9 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
           const errorMessage = `Unknown collision object operation: ${operation} (${CollisionObjectOperation[operation] ?? "UNKNOWN"}). Valid operations are: ADD (${CollisionObjectOperation.ADD}), REMOVE (${CollisionObjectOperation.REMOVE}), APPEND (${CollisionObjectOperation.APPEND}), MOVE (${CollisionObjectOperation.MOVE})`;
 
           // Report error to settings tree
-          const instId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
-          if (instId) {
+          if (instanceId) {
             this.renderer.settings.errors.add(
-              ["layers", instId, "collisionObjects", objectId],
+              ["layers", instanceId, "collisionObjects", objectId],
               MESSAGE_PROCESSING_ERROR,
               errorMessage,
             );
@@ -1544,10 +1536,10 @@ export class PlanningSceneExtension extends SceneExtension<CollisionObjectRender
       const errorMessage = `Failed to apply ${operationName} operation: ${error instanceof Error ? error.message : String(error)}`;
 
       // Report error to settings tree
-      const instId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
-      if (instId) {
+      const instanceId = this.currentInstanceId ?? this.findFirstPlanningSceneInstanceId();
+      if (instanceId) {
         this.renderer.settings.errors.add(
-          ["layers", instId, "collisionObjects", objectId],
+          ["layers", instanceId, "collisionObjects", objectId],
           MESSAGE_PROCESSING_ERROR,
           errorMessage,
         );

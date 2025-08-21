@@ -97,6 +97,8 @@ const DEFAULT_CUSTOM_SETTINGS: LayerSettingsPlanningScene = {
 
 const log = Logger.getLogger(__filename);
 
+// This really should extend SceneExtension<PlanningSceneRenderable> and support multiple layers properly
+// That's a huge refactor so we'll do it later
 export class PlanningSceneExtension extends SceneExtension<CollisionObjectRenderable> {
   public static extensionId = "foxglove.PlanningScene";
 

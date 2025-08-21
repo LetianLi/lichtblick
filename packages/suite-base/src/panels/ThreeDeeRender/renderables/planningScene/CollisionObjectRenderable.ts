@@ -7,7 +7,6 @@
 
 import * as THREE from "three";
 
-import Logger from "@lichtblick/log";
 import { LayerSettingsPlanningScene } from "@lichtblick/suite-base/panels/ThreeDeeRender/renderables/planningScene/PlanningSceneExtension";
 import type { RosValue } from "@lichtblick/suite-base/players/types";
 
